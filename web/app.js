@@ -1145,8 +1145,9 @@ async function queryIntegration() {
 async function renderKnowledge(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const [data, faqData] = await Promise.all([
+    const [data, faqData, sourceData] = await Promise.all([
       api('/api/knowledge?limit=100'), api('/api/faqs?limit=100'),
+      api('/api/knowledge/sources').catch(() => ({ items: [] })),
     ]);
     const canWrite = has('knowledge:write');
     const canReview = has('knowledge:review');
@@ -1223,6 +1224,34 @@ async function renderKnowledge(view) {
               <button class="btn btn-danger btn-sm" onclick="MA.reviewFaq(${faq.id},'reject')">拒绝</button>` : '<span class="muted small">—</span>'}</td>
           </tr>`).join('') || '<tr><td colspan="6" class="muted">暂无 FAQ</td></tr>'}
         </tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="btn-row" style="justify-content:space-between">
+          <div>
+            <h3 class="section-title" style="margin-bottom:4px">知识来源同步</h3>
+            <div class="section-sub" style="margin:0">文件/JSON/URL 同步为 pending 知识，仍需审核后生效；相同标题+来源自动跳过。</div>
+          </div>
+          ${canWrite ? '<button class="btn btn-primary btn-sm" onclick="MA.toggleSourceForm()">＋ 登记来源</button>' : ''}
+        </div>
+        ${canWrite ? `<form id="source-form" class="hidden" style="margin-top:12px">
+          <div class="form-row">
+            <label class="field"><span>名称</span><input id="source-name" placeholder="例如：院内制度增量" required /></label>
+            <label class="field"><span>类型</span><select id="source-kind"><option value="file">file</option><option value="json">json</option><option value="url">url</option></select></label>
+          </div>
+          <div class="form-row">
+            <label class="field"><span>位置（data/ 内相对路径，或 URL）</span><input id="source-location" placeholder="sources/制度.md" required /></label>
+            <label class="field"><span>适用范围（逗号分隔）</span><input id="source-scope" value="公共" /></label>
+          </div>
+          <button class="btn btn-primary" type="submit">登记</button>
+        </form>` : ''}
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>名称</th><th>类型</th><th>位置</th><th>范围</th><th>最近同步</th><th>操作</th></tr></thead><tbody>
+          ${sourceData.items.map((source) => `<tr>
+            <td><strong>${esc(source.name)}</strong></td><td>${esc(source.kind)}</td>
+            <td class="small mono">${esc(source.location)}</td><td class="small">${(source.scope || []).join('、')}</td>
+            <td class="small muted">${esc(source.last_sync_at || '未同步')}${source.last_detail ? `<div>${esc(source.last_detail)}</div>` : ''}</td>
+            <td>${canWrite ? `<button class="btn btn-outline btn-sm" onclick="MA.syncKnowledgeSource(${source.id})">立即同步</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">暂无来源</td></tr>'}
+        </tbody></table></div>
+        <div id="source-result" style="margin-top:10px"></div>
       </div>`;
     if (canWrite) {
       $('#knowledge-form').addEventListener('submit', async (event) => {
@@ -1250,6 +1279,21 @@ async function renderKnowledge(view) {
               scope: $('#faq-scope').value.split(',').map((s) => s.trim()).filter(Boolean),
             } });
             toast('FAQ 已提交审核');
+            route();
+          } catch (error) { toast(error.message, 'error'); }
+        });
+      }
+      const sourceForm = $('#source-form');
+      if (sourceForm) {
+        sourceForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          try {
+            await api('/api/knowledge/sources', { method: 'POST', body: {
+              name: $('#source-name').value.trim(), kind: $('#source-kind').value,
+              location: $('#source-location').value.trim(),
+              scope: $('#source-scope').value.split(',').map((s) => s.trim()).filter(Boolean),
+            } });
+            toast('来源已登记，可点击“立即同步”');
             route();
           } catch (error) { toast(error.message, 'error'); }
         });
@@ -1286,6 +1330,25 @@ async function reviewDoc(id, decision) {
 function toggleFaqForm() {
   const form = $('#faq-form');
   if (form) form.classList.toggle('hidden');
+}
+
+function toggleSourceForm() {
+  const form = $('#source-form');
+  if (form) form.classList.toggle('hidden');
+}
+
+async function syncKnowledgeSource(id) {
+  const box = $('#source-result');
+  if (box) box.innerHTML = '<div class="muted small">同步中…</div>';
+  try {
+    const result = await api(`/api/knowledge/sources/${id}/sync`, { method: 'POST' });
+    if (box) box.innerHTML = `<div class="alert ok">同步完成：导入 ${result.imported} 条，跳过 ${result.skipped} 条（待审核）。</div>`;
+    toast(`来源同步完成：导入 ${result.imported} 条`);
+    route();
+  } catch (error) {
+    if (box) box.innerHTML = `<div class="alert red">${esc(error.message)}</div>`;
+    toast(error.message, 'error');
+  }
 }
 
 async function reviewFaq(id, decision) {
@@ -1827,7 +1890,7 @@ window.MA = {
   toggleCreate, pgReset,
   pgCloseSession, searchMemory,
   memoryToggle, memoryDelete,
-  searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, testPolicy, runEval, showEvalRun,
+  searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, toggleSourceForm, syncKnowledgeSource, testPolicy, runEval, showEvalRun,
   generateReportDraft, openReport, saveReport, signReport, writebackReport, queryIntegration, runDify,
   notifyTestChannel, notifyAlerts,
   assignBadcase, closeBadcase, loadAudit, exportAudit,

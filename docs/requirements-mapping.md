@@ -99,6 +99,15 @@
 | 调用记录 | ✅ | `/api/integrations/calls`；数据集成页可查 |
 | 真实对接 | ⬜ | HIS/EMR/PACS 接口、字段映射、授权与脱敏须院方确认 |
 
+## 六、扩展能力：知识来源同步（POC）
+
+| 能力 | 实现 | 说明 |
+|---|---|---|
+| 来源登记 | ✅ `/api/knowledge/sources` | file/json/url + 范围 |
+| 增量同步 | ✅ `/api/knowledge/sources/{id}/sync` | 导入 pending；相同标题+来源跳过 |
+| 安全 | ✅ | 路径限制 data/ 内（拒绝目录穿越）；URL 拉取失败 502 |
+| 审核闭环 | ✅ | 同步内容不绕过审核；审核通过后才参与检索 |
+
 ## 七、扩展能力：Dify 长尾适配（POC）
 
 | 能力 | 实现 |

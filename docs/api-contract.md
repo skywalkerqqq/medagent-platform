@@ -48,6 +48,9 @@
 | POST | /api/knowledge/{id}/review | knowledge:review | `{decision:approve\|reject,comment?}` |
 | GET | /api/knowledge/search?q= | knowledge:read | 仅 approved + 生效期内 + 范围；返回文档+FAQ 引用 |
 | GET | /api/knowledge/{id} | knowledge:read | 详情 |
+| GET | /api/knowledge/sources | knowledge:read | 知识来源列表 |
+| POST | /api/knowledge/sources | knowledge:write | `{name, kind: file|json|url, location, scope}` |
+| POST | /api/knowledge/sources/{id}/sync | knowledge:write | 同步为 pending；目录穿越 400 invalid_path |
 | GET | /api/faqs | knowledge:read | FAQ 列表（status/q） |
 | POST | /api/faqs | knowledge:write | `{question,answer,source?,scope?}` → 201 pending |
 | POST | /api/faqs/{id}/review | knowledge:review | `{decision:approve\|reject,comment?}`，通过后参与检索 |

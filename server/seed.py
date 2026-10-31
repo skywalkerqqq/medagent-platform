@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import auth
 import common
@@ -275,6 +276,31 @@ def seed(conn) -> bool:
             (app_qc, "precise", "mock-fallback", 1, 95, 120, 0.00024, "", db.iso()),
         ],
     )
+    # 知识来源登记 + 待同步样例文件（同步后进入 pending，仍需审核）
+    source_dir = Path(db.DB_PATH).parent / "sources"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    (source_dir / "院内制度增量-2026.md").write_text(
+        "# 院内制度增量（2026 示例）\n\n"
+        "门诊会诊应在 24 小时内完成首次响应；急会诊 10 分钟内到位。\n"
+        "会诊记录须由申请医师与会诊医师双方签名，纳入病历归档。\n",
+        encoding="utf-8",
+    )
+    (source_dir / "指南要点-2026.json").write_text(
+        json.dumps([
+            {"title": "指南增量：高血压随访要点", "source": "心血管指南 2026",
+             "content": "高血压患者建议每 3 个月随访血压与用药依从性，合并糖尿病者每 1–3 个月复查。"},
+        ], ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    for name, kind, location, scope in [
+        ("院内制度增量（文件）", "file", "sources/院内制度增量-2026.md", ["公共", "医务处"]),
+        ("指南要点（JSON）", "json", "sources/指南要点-2026.json", ["公共", "心血管内科"]),
+    ]:
+        conn.execute(
+            "INSERT INTO knowledge_sources(name, kind, location, scope, enabled, created_by, created_at) "
+            "VALUES (?,?,?,?,?,?,?)",
+            (name, kind, location, json.dumps(scope, ensure_ascii=False), 1, "u_knowledge", db.iso()),
+        )
     # FAQ（知识中心补充；旧版 FAQ 能力吸收）
     seed_faqs = [
         ("肺炎患者出院后多久复查？", "一般建议出院后 1–2 周门诊复查，具体以主治医生医嘱为准。", ["公共", "心血管内科"], "医务处", "approved"),

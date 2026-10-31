@@ -629,6 +629,39 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(hard["hard"])
 
+    def test_29_knowledge_source_sync(self):
+        knowledge = self.token("u_knowledge")
+        status, sources = request("GET", "/api/knowledge/sources", token=knowledge)
+        self.assertEqual(status, 200)
+        file_source = next(item for item in sources["items"] if item["kind"] == "file")
+        status, synced = request("POST", f"/api/knowledge/sources/{file_source['id']}/sync", token=knowledge)
+        self.assertEqual(status, 200, synced)
+        self.assertEqual(synced["imported"], 1)
+        status, again = request("POST", f"/api/knowledge/sources/{file_source['id']}/sync", token=knowledge)
+        self.assertEqual(status, 200)
+        self.assertEqual(again["imported"], 0)
+        self.assertGreaterEqual(again["skipped"], 1)
+        # 同步导入为 pending：未审核不可检索
+        status, pending = request("GET", "/api/knowledge?status=pending&limit=100", token=knowledge)
+        target = next(item for item in pending["items"] if item["title"].startswith("院内制度增量"))
+        status, search = request("GET", "/api/knowledge/search?q=会诊响应", token=self.token("u_doctor"))
+        self.assertFalse(any(hit.get("doc_id") == target["id"] for hit in search["hits"]))
+        status, _ = request("POST", f"/api/knowledge/{target['id']}/review",
+                            {"decision": "approve", "comment": "来源同步审核通过"}, token=knowledge)
+        self.assertEqual(status, 200)
+        status, search = request("GET", "/api/knowledge/search?q=会诊响应", token=self.token("u_doctor"))
+        self.assertTrue(any(hit.get("doc_id") == target["id"] for hit in search["hits"]))
+        # 目录穿越拒绝；医生无登记权限
+        status, error = request("POST", "/api/knowledge/sources", {
+            "name": "穿越测试", "kind": "file", "location": "../../server/app.py",
+        }, token=knowledge)
+        self.assertEqual(status, 400)
+        self.assertEqual(error["error"]["code"], "invalid_path")
+        status, _ = request("POST", "/api/knowledge/sources", {
+            "name": "医生登记", "kind": "file", "location": "sources/x.md",
+        }, token=self.token("u_doctor"))
+        self.assertEqual(status, 403)
+
     def test_28_server_stable(self):
         status, payload = request("GET", "/api/health")
         self.assertEqual(status, 200)

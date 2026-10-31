@@ -33,7 +33,7 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 测试：
 
 ```powershell
-python tests/test_api.py       # 24 项接口验收测试
+python tests/test_api.py       # 25 项接口验收测试
 python tests/test_llm_live.py  # 3 项真实模型上游测试（fake OpenAI）
 python tests/test_dify.py      # 4 项 Dify 适配测试（fake Dify）
 python tests/test_notify.py    # 4 项告警通知测试（fake webhook）
@@ -53,6 +53,7 @@ python tests/test_notify.py    # 4 项告警通知测试（fake webhook）
 | 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→记忆→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
 | 报告编辑（扩展） | 报告草稿生成（JSON）→ 医生编辑 → 签名 → 修改率/审计；支持缺失字段提示 | PRD v2.0 临床工作台 FR-40 |
 | 成本对账（扩展） | 近 30 天按应用/模型汇总 tokens 与成本，标注 POC 估算口径 | PRD v2.0 运营 FR-55 |
+| 知识来源同步（扩展） | 文件/JSON/URL 来源登记→同步为 pending 知识→审核生效；路径限制 data/ 内；相同标题+来源跳过 | PRD v2.0 知识中枢 |
 | 告警通知（扩展） | 企业微信/钉钉/generic webhook；webhook 只读环境变量；测试发送/当前告警推送；失败不伪造 | PRD v2.0 运营；通知渠道 |
 | 数据集成（扩展） | HIS/EMR/PACS **mock**：患者上下文聚合、签名报告回写 HIS（幂等/外部 ID/审计）、集成调用记录 | PRD v2.0 §10；真实接口待院方 |
 | 患者小程序（扩展） | `miniprogram/`：微信登录→绑定→报告→随访→危险信号转人工；4 个页面 | v1.1 FR-012/013 + PRD 渠道 |
@@ -171,6 +172,7 @@ screenshots/         真实运行截图
 | GET | `/api/memories/search?q=&mode=vector\|bigram` | 64 维向量/关键词检索 |
 | PUT/DELETE | `/api/memories/{id}` | 更新/软删（`?hard=1` 管理员硬删） |
 | POST | `/api/knowledge/{id}/review` | 审核 |
+| GET/POST | `/api/knowledge/sources`、`/api/knowledge/sources/{id}/sync` | 知识来源登记/同步 |
 | GET | `/api/knowledge/search?q=` | 检索（仅生效+审核+范围） |
 | GET | `/api/models` / `/api/model-policies` | 模型/策略 |
 | POST | `/api/model-policies/{key}/test` | 网关测试（含降级） |

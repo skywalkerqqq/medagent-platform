@@ -9,6 +9,7 @@ import common
 import db
 import eval_center
 import knowledge
+import knowledge_sources
 import memory
 import models
 import integrations
@@ -38,7 +39,7 @@ def users(ctx):
 ROUTES = [
     ("GET", re.compile(r"^/api/health$"), health),
     ("GET", re.compile(r"^/api/users$"), users),
-] + auth.ROUTES + templates.ROUTES + knowledge.ROUTES + models.ROUTES + eval_center.ROUTES + \
+] + auth.ROUTES + templates.ROUTES + knowledge.ROUTES + knowledge_sources.ROUTES + models.ROUTES + eval_center.ROUTES + \
     apps.ROUTES + ops.ROUTES + patient.ROUTES + safety.ROUTES + wechat.ROUTES + memory.ROUTES + reports.ROUTES + integrations.ROUTES + dify_adapter.ROUTES + notify.ROUTES
 
 

@@ -5,6 +5,8 @@ import sqlite3
 from datetime import datetime, timedelta
 from pathlib import Path
 
+DB_PATH = ""
+
 SCHEMA_SQL = """
 CREATE TABLE IF NOT EXISTS institutions (
     id TEXT PRIMARY KEY,
@@ -39,6 +41,20 @@ CREATE TABLE IF NOT EXISTS templates (
     eval_threshold REAL,
     config TEXT,
     status TEXT
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    kind TEXT DEFAULT 'file',           -- file | json | url
+    location TEXT,
+    scope TEXT,                         -- JSON array
+    enabled INTEGER DEFAULT 1,
+    last_sync_at TEXT,
+    last_status TEXT,
+    last_detail TEXT,
+    created_by TEXT,
+    created_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS knowledge_docs (
@@ -419,7 +435,9 @@ def connect(path) -> sqlite3.Connection:
 
 
 def init_db(path, reset: bool = False) -> sqlite3.Connection:
+    global DB_PATH
     path = Path(path)
+    DB_PATH = str(path.resolve())
     if reset:
         for suffix in ("", "-wal", "-shm"):
             Path(str(path) + suffix).unlink(missing_ok=True)
