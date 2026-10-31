@@ -21,11 +21,20 @@ if (-not $node) {
 }
 
 Write-Host "=== 接口验收测试 ===" -ForegroundColor Cyan
-& $py tests/test_api.py
-& $py tests/test_llm_live.py
-& $py tests/test_dify.py
-& $py tests/test_notify.py
-$testCode = $LASTEXITCODE
+$testCode = 0
+$suites = @(
+    "tests/test_api.py",
+    "tests/test_llm_live.py",
+    "tests/test_dify.py",
+    "tests/test_notify.py",
+    "tests/test_production_import.py"
+)
+foreach ($suite in $suites) {
+    & $py $suite
+    if ($LASTEXITCODE -ne 0) { $testCode = 1 }
+}
+& $py -m py_compile production/app.py
+if ($LASTEXITCODE -ne 0) { $testCode = 1 }
 
 Write-Host "=== 前端 JS 语法 ===" -ForegroundColor Cyan
 if ($node) {
@@ -52,6 +61,7 @@ if ($testCode -eq 0 -and $jsCode -eq 0) {
     Pop-Location
     exit 1
 }
+
 
 
 

@@ -1,0 +1,11 @@
+.git
+.gitignore
+data/*.db
+data/*.db-*
+data/backups
+tests/.tmp*
+screenshots
+node_modules
+__pycache__
+*.pyc
+browser-screenshots

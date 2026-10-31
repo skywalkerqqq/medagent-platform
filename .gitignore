@@ -8,3 +8,7 @@ __pycache__/
 node_modules/
 .DS_Store
 Thumbs.db
+.env
+deploy/nginx/tls/*.crt
+deploy/nginx/tls/*.key
+
