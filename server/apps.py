@@ -369,12 +369,36 @@ def versions(ctx):
     return 200, {"items": items, "total": len(items)}
 
 
+def feedback(ctx):
+    """试跑反馈：有用记录审计；无用进入 BadCase 队列（FR-010）。"""
+    conn, user, body = ctx["conn"], ctx["user"], ctx["body"]
+    app = _load(conn, ctx["params"]["id"], user)
+    common.require(user, "app:trial", "无反馈权限")
+    helpful = bool(body.get("helpful"))
+    question = common.str_field(body.get("question"), "question", default="")
+    output = common.str_field(body.get("output"), "output", default="")
+    reason = common.str_field(body.get("reason"), "reason", default="quality")
+    comment = common.str_field(body.get("comment"), "comment", default="")
+    badcase_id = None
+    if not helpful:
+        badcase_id = conn.execute(
+            "INSERT INTO badcases(app_id, source, question, output, category, severity, status, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?)",
+            (app["id"], user["id"], question, output, reason, "medium", "open", db.iso()),
+        ).lastrowid
+    common.audit(conn, user["id"], "试跑反馈", "app", app["id"],
+                 f"helpful={helpful} reason={reason} comment={comment[:60]}")
+    conn.commit()
+    return 200, {"ok": True, "helpful": helpful, "badcase_id": badcase_id}
+
+
 ROUTES = [
     ("GET", re.compile(r"^/api/apps$"), list_apps),
     ("POST", re.compile(r"^/api/apps$"), create_app),
     ("GET", re.compile(r"^/api/apps/(?P<id>\d+)$"), get_app),
     ("PUT", re.compile(r"^/api/apps/(?P<id>\d+)$"), update_app),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/trial$"), trial),
+    ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/feedback$"), feedback),
     ("GET", re.compile(r"^/api/apps/(?P<id>\d+)/release-check$"), release_check),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/submit$"), submit),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/disable$"), disable),

@@ -24,11 +24,18 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div>
+        <div class="topbar-left">
           <div id="page-title" class="page-title">登录</div>
           <div id="page-crumb" class="crumb">MediAgent / 登录</div>
         </div>
-        <div id="top-actions" class="top-actions"></div>
+        <div class="topbar-right">
+          <div class="global-search">
+            <span class="search-icon" id="search-icon"></span>
+            <input id="global-search" placeholder="搜索应用 / 知识（回车）" />
+          </div>
+          <span class="env-badge"><span class="env-dot"></span>POC · v1.1</span>
+          <div id="top-actions" class="top-actions"></div>
+        </div>
       </header>
       <section id="view" class="view"></section>
     </main>

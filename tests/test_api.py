@@ -381,8 +381,16 @@ class MediAgentV11Test(unittest.TestCase):
         status, _ = request("GET", "/api/approvals", token=creator)
         self.assertEqual(status, 403)
         doctor = self.token("u_doctor")
-        status, _ = request("POST", f"/api/apps/{self.app_id}/trial", {"query": "华法林 INR 监测"}, token=doctor)
+        status, trial = request("POST", f"/api/apps/{self.app_id}/trial", {"query": "华法林 INR 监测"}, token=doctor)
         self.assertEqual(status, 200)
+        self.assertGreaterEqual(len(trial["trace"]), 3)
+        self.assertTrue(any(step["type"] == "model" for step in trial["trace"]))
+        status, feedback = request("POST", f"/api/apps/{self.app_id}/feedback", {
+            "helpful": False, "question": "华法林 INR 监测", "output": trial["output"],
+            "reason": "accuracy", "comment": "缺少监测频率",
+        }, token=doctor)
+        self.assertEqual(status, 200)
+        self.assertIsNotNone(feedback["badcase_id"])
 
     def test_17_disable_app(self):
         platform = self.token("u_platform")

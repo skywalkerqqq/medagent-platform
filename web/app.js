@@ -11,24 +11,47 @@ const state = {
 
 const NAV = [
   { group: '工作台', items: [
-    { key: 'dashboard', label: '总览 / 验收', icon: '◈', path: '/dashboard' },
-    { key: 'apps', label: '应用工厂', icon: '▤', path: '/apps' },
+    { key: 'dashboard', label: '总览 / 验收', icon: 'dashboard', path: '/dashboard' },
+    { key: 'apps', label: '应用工厂', icon: 'layers', path: '/apps' },
+    { key: 'playground', label: '运行调试', icon: 'chat', path: '/playground' },
   ] },
   { group: '能力', items: [
-    { key: 'knowledge', label: '知识中心', icon: '▥', path: '/knowledge' },
-    { key: 'models', label: '模型网关', icon: '◫', path: '/models' },
-    { key: 'eval', label: '评测门禁', icon: '◎', path: '/eval' },
+    { key: 'knowledge', label: '知识中心', icon: 'book', path: '/knowledge' },
+    { key: 'models', label: '模型网关', icon: 'cpu', path: '/models' },
+    { key: 'eval', label: '评测门禁', icon: 'target', path: '/eval' },
   ] },
   { group: '治理与运营', items: [
-    { key: 'ops', label: '运营 / BadCase', icon: '▦', path: '/ops' },
-    { key: 'patient', label: '患者端演示', icon: '♙', path: '/patient' },
+    { key: 'ops', label: '运营 / BadCase', icon: 'chart', path: '/ops' },
+    { key: 'patient', label: '患者端演示', icon: 'user', path: '/patient' },
   ] },
 ];
+
+const ICON_PATHS = {
+  dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/>',
+  chat: '<path d="M21 12a8.5 8.5 0 0 1-8.5 8.5H5L3 22v-9.5A8.5 8.5 0 0 1 11.5 4h1A8.5 8.5 0 0 1 21 12z"/>',
+  book: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 3H20v18H6.5A2.5 2.5 0 0 1 4 18.5v-13A2.5 2.5 0 0 1 6.5 3z"/>',
+  cpu: '<rect x="7" y="7" width="10" height="10" rx="2"/><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 1v2M15 1v2M9 21v2M15 21v2M1 9h2M1 15h2M21 9h2M21 15h2"/>',
+  target: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4"/><circle cx="12" cy="12" r="1"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  shield: '<path d="M12 3 5 6v5c0 5 3.4 8 7 10 3.6-2 7-5 7-10V6l-7-3z"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.6-3.6"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  arrow: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
+  refresh: '<path d="M20 11A8 8 0 1 0 18.4 16"/><path d="M20 4v7h-7"/>',
+};
+
+function icon(name, size = 18) {
+  const path = ICON_PATHS[name] || '<circle cx="12" cy="12" r="3"/>';
+  return `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
+}
 
 const TITLES = {
   '/login': ['登录', 'MediAgent / 登录'],
   '/dashboard': ['总览 / 验收', '工作台 / 总览'],
   '/apps': ['应用工厂', '工作台 / 应用工厂'],
+  '/playground': ['运行调试', '工作台 / 运行调试'],
   '/knowledge': ['知识中心', '能力 / 知识中心'],
   '/models': ['模型网关', '能力 / 模型网关'],
   '/eval': ['评测门禁', '能力 / 评测门禁'],
@@ -114,7 +137,7 @@ function layout() {
   nav.innerHTML = NAV.map((group) => `
     <div class="nav-group">${group.group}</div>
     ${group.items.map((item) => `<a class="nav-item" href="#${item.path}" data-key="${item.key}">
-      <span class="nav-icon">${item.icon}</span><span class="nav-label">${esc(item.label)}</span>
+      <span class="nav-icon">${icon(item.icon, 18)}</span><span class="nav-label">${esc(item.label)}</span>
     </a>`).join('')}
   `).join('');
   const user = state.user;
@@ -166,6 +189,7 @@ function route() {
   const pages = {
     '/dashboard': renderDashboard,
     '/apps': renderApps,
+    '/playground': renderPlayground,
     '/knowledge': renderKnowledge,
     '/models': renderModels,
     '/eval': renderEval,
@@ -183,23 +207,45 @@ function route() {
 /* ---------------------------------------------------------------- 登录 */
 function renderLogin(view) {
   view.innerHTML = `
-    <div class="login-wrap">
-      <div class="login-logo">M</div>
-      <h1 class="login-title">MediAgent 医疗 AI 中台</h1>
-      <p class="login-sub">v1.1 · 服务端 Token 会话身份 · 应用工厂 / 知识治理 / 评测门禁 / 患者端联动</p>
-      <div class="card">
-        <form id="login-form">
-          <label class="field"><span>用户名</span><input id="login-user" value="u_creator" autocomplete="username" /></label>
-          <label class="field"><span>密码</span><input id="login-pass" type="password" value="medagent123" autocomplete="current-password" /></label>
-          <button class="btn btn-primary" style="width:100%" type="submit">登录</button>
-        </form>
-        <div class="demo-accounts">
-          演示账号（密码均为 <code>medagent123</code>）：<br>
-          <code>u_creator</code> 业务人员 · <code>u_dept</code> 科室审批人 · <code>u_platform</code> 平台审批人<br>
-          <code>u_knowledge</code> 知识运营 · <code>u_eval</code> 评测 · <code>u_doctor</code> 医生 · <code>u_patient</code> 患者
+    <div class="auth-page">
+      <section class="auth-brand">
+        <div class="auth-logo">M</div>
+        <div class="auth-kicker">MEDICAL AI PLATFORM</div>
+        <h1>让医疗 AI<br>可治理地落地</h1>
+        <p>应用工厂 · 知识治理 · 模型网关 · 评测门禁 · 患者端联动<br>服务端 Token 身份 · 全链路审计 · 医疗安全边界</p>
+        <div class="auth-points">
+          <div class="auth-point"><span>01</span>业务人员从模板建应用，1 天上线</div>
+          <div class="auth-point"><span>02</span>未过评测门禁不得发布，双审批可追溯</div>
+          <div class="auth-point"><span>03</span>模型不可用不伪造结果，高风险自动转人工</div>
         </div>
-      </div>
+        <div class="auth-foot">MediAgent v1.1 · POC 基线（非生产/非注册）</div>
+      </section>
+      <section class="auth-panel">
+        <div class="auth-card">
+          <h2>登录工作台</h2>
+          <p class="auth-sub">使用院方账号登录；演示密码均为 <code>medagent123</code></p>
+          <form id="login-form">
+            <label class="field"><span>用户名</span><input id="login-user" value="u_creator" autocomplete="username" /></label>
+            <label class="field"><span>密码</span><input id="login-pass" type="password" value="medagent123" autocomplete="current-password" /></label>
+            <button class="btn btn-primary auth-submit" type="submit">登录</button>
+          </form>
+          <div class="demo-title">快速切换演示角色</div>
+          <div class="demo-grid">
+            ${[
+              ['u_creator', '业务人员'], ['u_dept', '科室审批'], ['u_platform', '平台审批'],
+              ['u_knowledge', '知识运营'], ['u_eval', '评测'], ['u_patient', '患者'],
+            ].map(([id, label]) => `<button type="button" class="demo-chip" data-user="${id}">
+              <strong>${label}</strong><span>${id}</span></button>`).join('')}
+          </div>
+        </div>
+      </section>
     </div>`;
+  $$('.demo-chip').forEach((chip) => {
+    chip.addEventListener('click', () => {
+      $('#login-user').value = chip.dataset.user;
+      $('#login-pass').focus();
+    });
+  });
   $('#login-form').addEventListener('submit', async (event) => {
     event.preventDefault();
     try {
@@ -291,36 +337,71 @@ async function renderApps(view) {
   try {
     const [apps, templates] = await Promise.all([api('/api/apps'), api('/api/templates')]);
     state.templates = templates.items;
+    const params = new URLSearchParams((window.location.hash.split('?')[1] || ''));
+    const keyword = (params.get('q') || '').trim();
+    const list = keyword
+      ? apps.items.filter((app) => `${app.name}${app.code}${app.template_name}${app.department}`.includes(keyword))
+      : apps.items;
     const canCreate = has('app:create');
     view.innerHTML = `
-      ${canCreate ? `<div class="card">
+      <div class="apps-toolbar card">
+        <div>
+          <h3 class="section-title" style="margin-bottom:4px">应用目录 <span class="muted small">（${list.length}/${apps.total}）</span></h3>
+          <div class="section-sub" style="margin:0">从模板创建 → 试跑 → 发布检查 → 科室/平台审批 → 发布</div>
+        </div>
+        <div class="btn-row">
+          <div class="search-box">${icon('search', 15)}<input id="apps-filter" placeholder="筛选名称 / 编号 / 科室" value="${esc(keyword)}" /></div>
+          ${canCreate ? `<button class="btn btn-primary" onclick="MA.toggleCreate()">＋ 新建应用</button>` : ''}
+        </div>
+      </div>
+      ${canCreate ? `<div class="card hidden" id="create-panel">
         <h3 class="section-title">从模板创建应用</h3>
-        <p class="section-sub">模板定义提示词、知识范围、模型策略与评测门禁；创建后先试跑，再走发布检查与双审批。</p>
+        <p class="section-sub">模板固定提示词、知识范围、模型策略与评测门禁；创建后先试跑，再走发布检查与双审批。</p>
         <div class="form-row">
           <label class="field"><span>应用名称</span><input id="app-name" placeholder="例如：心内科知识助手" /></label>
           <label class="field"><span>模板</span><select id="app-template">
             ${state.templates.map((t) => `<option value="${esc(t.key)}">${esc(t.name)}（v${t.version} · ${esc(t.risk_level)} · 阈值 ${t.eval_threshold}）</option>`).join('')}
           </select></label>
         </div>
-        <div class="form-actions"><button class="btn btn-primary" onclick="MA.createApp()">创建草稿</button></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="MA.createApp()">创建草稿</button>
+          <button class="btn btn-ghost" onclick="MA.toggleCreate()">取消</button>
+        </div>
       </div>` : ''}
-      <div class="card">
-        <h3 class="section-title">应用列表 <span class="muted small">（${apps.total}）</span></h3>
-        <div class="table-wrap"><table><thead><tr><th>编号</th><th>名称</th><th>模板</th><th>状态</th><th>版本</th><th>最近评测</th><th>操作</th></tr></thead><tbody>
-          ${apps.items.map((app) => `<tr>
-            <td class="mono">${esc(app.code)}</td>
-            <td><strong>${esc(app.name)}</strong><div class="small muted">${esc(app.department)}</div></td>
-            <td class="small">${esc(app.template_name)}</td>
-            <td>${statusPill(app.status)}</td>
-            <td>v${app.current_version || 0}</td>
-            <td>${app.latest_eval ? `${statusPill(app.latest_eval.gate_status)}<span class="small muted"> run#${app.latest_eval.id}</span>` : '<span class="muted small">未评测</span>'}</td>
-            <td><a class="btn btn-outline btn-sm" href="#/apps/${app.id}">打开</a></td>
-          </tr>`).join('') || '<tr><td colspan="7" class="muted">暂无应用</td></tr>'}
-        </tbody></table></div>
+      <div class="app-grid">
+        ${list.map((app) => `<a class="app-card" href="#/apps/${app.id}">
+          <div class="app-card-top">
+            <span class="app-code mono">${esc(app.code)}</span>
+            ${statusPill(app.status)}
+          </div>
+          <div class="app-card-name">${esc(app.name)}</div>
+          <div class="app-card-sub">${esc(app.template_name)} · ${esc(app.department)}</div>
+          <div class="app-card-meta">
+            <span>版本 <b>v${app.current_version || 0}</b></span>
+            <span>门禁 ${app.latest_eval ? statusPill(app.latest_eval.gate_status) : '<span class="pill gray">未评测</span>'}</span>
+          </div>
+          <div class="app-card-foot">
+            <span>${esc(app.owner_id)}</span>
+            <span class="app-open">打开 ${icon('arrow', 14)}</span>
+          </div>
+        </a>`).join('') || `<div class="card empty-block">未找到匹配应用${keyword ? `（${esc(keyword)}）` : ''}</div>`}
       </div>`;
+    const filter = $('#apps-filter');
+    if (filter) {
+      filter.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        const value = filter.value.trim();
+        window.location.hash = value ? `#/apps?q=${encodeURIComponent(value)}` : '#/apps';
+      });
+    }
   } catch (error) {
     view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
   }
+}
+
+function toggleCreate() {
+  const panel = $('#create-panel');
+  if (panel) panel.classList.toggle('hidden');
 }
 
 async function createApp() {
@@ -331,6 +412,243 @@ async function createApp() {
     const app = await api('/api/apps', { method: 'POST', body: { name, template_key: templateKey } });
     toast(`已创建 ${app.code}`);
     window.location.hash = `#/apps/${app.id}`;
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+/* ---------------------------------------------------------------- 运行调试（对话式） */
+const pg = { apps: [], app: null, messages: [], sending: false };
+
+async function renderPlayground(view) {
+  view.innerHTML = '<div class="card">加载中…</div>';
+  try {
+    const apps = await api('/api/apps');
+    pg.apps = apps.items;
+    const params = new URLSearchParams((window.location.hash.split('?')[1] || ''));
+    const wanted = Number(params.get('app'));
+    const target = apps.items.find((item) => item.id === wanted)
+      || apps.items.find((item) => item.status === 'published')
+      || apps.items[0];
+    if (!target) {
+      view.innerHTML = `<div class="card">${'暂无可用应用，请先在应用工厂创建。'}</div>`;
+      return;
+    }
+    await pgSelect(view, target.id);
+  } catch (error) {
+    view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function pgSelect(view, appId) {
+  try {
+    const app = await api(`/api/apps/${appId}`);
+    pg.app = app;
+    pg.messages = [];
+    view.innerHTML = `
+      <div class="pg-layout">
+        <aside class="pg-side card">
+          <label class="field"><span>选择应用</span>
+            <select id="pg-app-select">
+              ${pg.apps.map((item) => `<option value="${item.id}" ${item.id === appId ? 'selected' : ''}>${esc(item.name)}（${statusText(item.status)}）</option>`).join('')}
+            </select>
+          </label>
+          <div class="pg-apphead">
+            <div class="pg-avatar">${esc(app.template_name.slice(0, 1))}</div>
+            <div>
+              <div class="pg-appname">${esc(app.name)}</div>
+              <div class="small muted">${esc(app.department)} · ${esc(app.template_name)}</div>
+            </div>
+          </div>
+          <div class="pg-meta">
+            <div><span>状态</span>${statusPill(app.status)}</div>
+            <div><span>版本</span>v${app.current_version || 0}</div>
+            <div><span>风险</span>${esc(app.risk_level)}</div>
+            <div><span>模型策略</span>${esc(app.config.model_policy)}</div>
+            <div><span>知识范围</span>${esc((app.config.knowledge_scope || []).join('、'))}</div>
+          </div>
+          <div class="btn-row" style="margin-top:14px">
+            <a class="btn btn-outline btn-sm" href="#/apps/${app.id}">应用详情</a>
+            <button class="btn btn-ghost btn-sm" onclick="MA.pgReset()">清空对话</button>
+          </div>
+          <div class="pg-quick">
+            <div class="section-label">示例问题</div>
+            ${pgQuickQuestions(app).map((q) => `<button class="quick-chip" data-quick="${esc(q)}">${esc(q)}</button>`).join('')}
+          </div>
+          <div class="pg-note small muted">试跑同样走模板→知识→模型网关→安全检查；输出含引用、版本与免责声明，不写入正式记录。</div>
+        </aside>
+        <section class="pg-main card">
+          <div class="pg-head">
+            <div>
+              <div class="pg-title">${esc(app.name)} <span class="pill ${app.status === 'published' ? 'green' : 'gray'}">${statusText(app.status)}</span></div>
+              <div class="small muted">${esc(app.template_name)} v${app.template_version} · 模板/提示词/模型/知识版本随输出固定</div>
+            </div>
+            <span class="pg-model">${esc(app.config.model_policy)}</span>
+          </div>
+          <div class="pg-chat" id="pg-chat"></div>
+          <div class="pg-composer">
+            <textarea id="pg-input" rows="2" placeholder="输入问题（知识问答），或粘贴病历文本（病历质控）… Ctrl+Enter 发送"></textarea>
+            <button class="btn btn-primary" id="pg-send">发送</button>
+          </div>
+        </section>
+      </div>`;
+    $('#pg-app-select').addEventListener('change', (event) => {
+      const id = Number(event.target.value);
+      window.location.hash = `#/playground?app=${id}`;
+    });
+    $('#pg-send').addEventListener('click', () => pgSend());
+    $('#pg-input').addEventListener('keydown', (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') { event.preventDefault(); pgSend(); }
+    });
+    $$('.quick-chip').forEach((chip) => chip.addEventListener('click', () => {
+      $('#pg-input').value = chip.dataset.quick;
+      $('#pg-input').focus();
+    }));
+    pgRender();
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
+function statusText(status) {
+  return {
+    draft: '草稿', testing: '测试中', pending_dept: '待科室审批', pending_platform: '待平台审批',
+    published: '已发布', disabled: '已停用',
+  }[status] || status;
+}
+
+function pgQuickQuestions(app) {
+  if (app.template_key === 'med-qc') {
+    return [
+      '患者主诉胸痛 3 天，现病史不详，初步诊断待查',
+      '入院记录：主诉胸痛，查体无异常，初步诊断待查',
+      '出院小结缺少医师签名',
+    ];
+  }
+  return [
+    '社区获得性肺炎抗感染治疗原则是什么？',
+    '华法林与哪些药物相互作用？',
+    '院内输血知情同意流程要求？',
+  ];
+}
+
+function pgRender() {
+  const chat = $('#pg-chat');
+  if (!chat) return;
+  if (!pg.messages.length) {
+    chat.innerHTML = `<div class="pg-welcome">
+      <div class="pg-welcome-icon">${icon('chat', 26)}</div>
+      <div class="pg-welcome-title">开始调试「${esc(pg.app.name)}」</div>
+      <div class="pg-welcome-desc">${pg.app.template_key === 'med-qc'
+        ? '粘贴一段病历文本，查看质控缺陷清单（类型/依据/定位/建议）。'
+        : '输入临床问题，查看带引用的回答与执行轨迹。'}</div>
+      <div class="pg-welcome-meta">
+        <span>${icon('shield', 13)}医生终审 · 不构成诊疗建议</span>
+        <span>${icon('book', 13)}仅检索已审核生效知识</span>
+      </div>
+    </div>`;
+    return;
+  }
+  chat.innerHTML = pg.messages.map((message, index) => {
+    if (message.role === 'user') {
+      return `<div class="msg-row user"><div class="msg-bubble">${esc(message.text)}</div></div>`;
+    }
+    if (message.pending) {
+      return `<div class="msg-row bot"><div class="msg-bubble pending">正在执行：模板 → 知识 → 模型 → 安全检查…</div></div>`;
+    }
+    const result = message.result;
+    return `<div class="msg-row bot">
+      <div class="msg-avatar">M</div>
+      <div class="msg-body">
+        <div class="msg-bubble">
+          <div class="msg-text">${esc(result.output)}</div>
+          ${result.citations && result.citations.length
+            ? `<div class="citations">${result.citations.map((c) => `<span class="citation">${esc(c.citation || c.title)}</span>`).join('')}</div>`
+            : `<div class="alert amber small">无可用引用：按规则拒答或提示人工，不编造。</div>`}
+          ${result.degraded ? `<div class="alert amber small">降级/阻断标记：当前输出非主模型或已触发安全处置。</div>` : ''}
+        </div>
+        <div class="msg-meta">
+          <span>${result.latency_ms}ms · ${result.tokens} tokens</span>
+          <span>模型 ${esc(result.versions.model || '—')} · 策略 ${esc(result.versions.model_policy)}</span>
+          <span>免责：${esc(result.disclaimer)}</span>
+        </div>
+        <details class="trace">
+          <summary>执行轨迹（${result.trace.length} 步）</summary>
+          ${result.trace.map((step) => `<div class="trace-row">
+            <span class="trace-dot ${esc(step.status)}"></span>
+            <div><div class="trace-name">${esc(step.name)} <span class="pill ${traceTone(step.status)}">${esc(traceStatus(step.status))}</span></div>
+            <div class="trace-detail">${esc(step.detail)} · ${step.latency_ms}ms</div></div>
+          </div>`).join('')}
+        </details>
+        <div class="msg-actions">
+          <button class="btn btn-ghost btn-sm" data-feedback="good" data-index="${index}">👍 有帮助</button>
+          <button class="btn btn-ghost btn-sm" data-feedback="bad" data-index="${index}">👎 没帮助</button>
+          <span class="small muted">反馈进入 BadCase 队列</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  chat.scrollTop = chat.scrollHeight;
+  chat.querySelectorAll('[data-feedback]').forEach((button) => {
+    button.addEventListener('click', () => pgFeedback(Number(button.dataset.index), button.dataset.feedback));
+  });
+}
+
+function traceStatus(status) {
+  return { succeeded: '完成', empty: '未命中', degraded: '降级', failed: '失败', blocked: '阻断' }[status] || status;
+}
+function traceTone(status) {
+  return { succeeded: 'green', empty: 'amber', degraded: 'amber', failed: 'red', blocked: 'red' }[status] || 'gray';
+}
+
+async function pgSend() {
+  const input = $('#pg-input');
+  const text = input.value.trim();
+  if (!text || pg.sending) return;
+  pg.sending = true;
+  pg.messages.push({ role: 'user', text });
+  pg.messages.push({ role: 'assistant', pending: true });
+  input.value = '';
+  pgRender();
+  try {
+    const result = await api(`/api/apps/${pg.app.id}/trial`, { method: 'POST', body: { query: text } });
+    pg.messages.pop();
+    pg.messages.push({ role: 'assistant', result, question: text });
+  } catch (error) {
+    pg.messages.pop();
+    pg.messages.push({ role: 'assistant', result: {
+      output: `试跑失败：${error.message}`, citations: [], trace: [],
+      latency_ms: 0, tokens: 0, degraded: true,
+      versions: { model: '—', model_policy: '—' }, disclaimer: '请稍后重试',
+    } });
+  } finally {
+    pg.sending = false;
+    pgRender();
+  }
+}
+
+function pgReset() {
+  if (pg.app) {
+    pg.messages = [];
+    pgRender();
+  }
+}
+
+async function pgFeedback(index, value) {
+  const message = pg.messages[index];
+  if (!message || !message.result) return;
+  let reason = 'quality';
+  let comment = '';
+  if (value === 'bad') {
+    reason = window.prompt('请选择问题类别：accuracy（准确性）/ recall（漏检）/ safety（安全）/ ux（体验）', 'accuracy') || 'accuracy';
+    comment = window.prompt('补充说明（可选）') || '';
+  }
+  try {
+    const data = await api(`/api/apps/${pg.app.id}/feedback`, {
+      method: 'POST',
+      body: { helpful: value === 'good', question: message.question || '', output: message.result.output, reason, comment },
+    });
+    toast(value === 'good' ? '感谢反馈' : `已登记 BadCase #${data.badcase_id || ''}`, value === 'good' ? '' : 'error');
   } catch (error) {
     toast(error.message, 'error');
   }
@@ -355,6 +673,7 @@ async function renderAppDetail(view, id) {
             <div class="small muted" style="margin-top:6px">${esc(app.department)} · ${esc(app.template_name)} v${app.template_version} · 当前版本 v${app.current_version || 0} · 创建人 ${esc(app.owner_id)}</div>
           </div>
           <div class="btn-row">
+            <a class="btn btn-outline btn-sm" href="#/playground?app=${app.id}">运行调试</a>
             ${canSubmit ? '<button class="btn btn-primary" onclick="MA.submitApp()">提交发布检查</button>' : ''}
             ${canPlatform && app.status === 'published' ? '<button class="btn btn-danger btn-sm" onclick="MA.disableApp()">停用</button>' : ''}
           </div>
@@ -887,10 +1206,22 @@ async function submitFollowup() {
 /* ---------------------------------------------------------------- boot */
 window.MA = {
   createApp, submitApp, decide, rollback, disableApp, trial,
+  toggleCreate, pgReset,
   searchKnowledge, reviewDoc, testPolicy, runEval, showEvalRun,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,
 };
+
+const globalSearch = $('#global-search');
+if (globalSearch) {
+  globalSearch.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    const value = globalSearch.value.trim();
+    window.location.hash = value ? `#/apps?q=${encodeURIComponent(value)}` : '#/apps';
+  });
+}
+const searchIcon = $('#search-icon');
+if (searchIcon) searchIcon.innerHTML = icon('search', 15);
 
 $('#logout').addEventListener('click', () => logout());
 window.addEventListener('hashchange', route);

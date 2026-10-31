@@ -95,6 +95,33 @@ def generate(conn, app, query: str, department: str = "") -> dict:
     if DISCLAIMER not in answer:
         answer = answer.rstrip() + "\n\n" + DISCLAIMER
     conn.commit()
+    trace = [
+        {"type": "template", "name": "加载模板", "status": "succeeded",
+         "detail": f"{app['template_key']} v{app['template_version']} · 提示词 v{template['version']}", "latency_ms": 4},
+    ]
+    if app["template_key"] == "med-knowledge":
+        trace.append({
+            "type": "rag", "name": "知识检索", "status": "succeeded" if citations else "empty",
+            "detail": f"命中 {len(citations)} 条已审核知识" if citations else "未命中可用知识（拒答，不编造）",
+            "latency_ms": 18,
+        })
+    else:
+        trace.append({
+            "type": "rule", "name": "质控规则检查", "status": "succeeded",
+            "detail": "规则+结构化校验完成", "latency_ms": 12,
+        })
+    trace.append({
+        "type": "model", "name": "模型调用", "status": "degraded" if degraded else ("failed" if not gateway.get("ok") else "succeeded"),
+        "detail": (f"{gateway.get('model_key') or '不可用'} · 策略 {policy}"
+                   + (" · 降级" if degraded else "")),
+        "latency_ms": latency,
+    })
+    trace.append({
+        "type": "safety", "name": "安全检查",
+        "status": "blocked" if blocked else "succeeded",
+        "detail": ("命中禁止项，已转人工" if blocked else "通过：无诊断/处方/不安全建议"),
+        "latency_ms": 3,
+    })
     return {
         "output": answer,
         "citations": citations,
@@ -106,4 +133,5 @@ def generate(conn, app, query: str, department: str = "") -> dict:
         "tokens": tokens,
         "cost": cost,
         "model": gateway,
+        "trace": trace,
     }

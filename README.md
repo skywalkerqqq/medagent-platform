@@ -47,6 +47,7 @@ python tests/test_api.py     # 19 项接口验收测试
 | 身份 | 服务端 Token 会话（8h）、登录/退出、角色权限；**拒绝 X-User-Id 作为身份** | FR-001 / §8.1 |
 | 机构/角色 | 用户-角色-科室；页面/API/数据查询权限校验 | FR-002 |
 | 应用工厂 | 2 个模板、创建/配置、试跑（输出+引用+免责+版本+降级） | FR-003 |
+| 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
 | 评测门禁 | 评测集、指标（召回/引用/答案正确/编造/检出）、阈值、未达标阻断发布 | FR-004 |
 | 审批发布 | 科室→平台两级审批；发布版本快照；停用/回滚；发布人/审批人/版本可追溯 | FR-005 |
 | 模型网关 | 模型注册、策略链、超时/降级显式标记、密钥/调用记录；小程序不直连模型 | FR-006 |
@@ -135,7 +136,8 @@ screenshots/         真实运行截图
 | GET | `/api/templates` | 模板列表 |
 | GET/POST | `/api/apps` | 应用列表/创建 |
 | PUT | `/api/apps/{id}` | 修改草稿配置 |
-| POST | `/api/apps/{id}/trial` | 试跑 |
+| POST | `/api/apps/{id}/trial` | 试跑（返回输出/引用/版本/轨迹） |
+| POST | `/api/apps/{id}/feedback` | 试跑反馈（无用→BadCase） |
 | GET | `/api/apps/{id}/release-check` | 发布前逐项检查 |
 | POST | `/api/apps/{id}/submit` | 提交发布（进入科室审批） |
 | POST | `/api/apps/{id}/rollback` | 回滚 |
@@ -158,21 +160,25 @@ screenshots/         真实运行截图
 
 ## 6. 截图
 
-| 总览/验收 | 应用工厂 |
+| 登录 | 总览 / 验收 |
 |---|---|
-| ![总览](screenshots/01-dashboard.png) | ![应用工厂](screenshots/02-app-factory.png) |
+| ![登录](screenshots/00-login.png) | ![总览](screenshots/01-dashboard.png) |
 
-| 应用详情（门禁+审批） | 试跑（引用+版本） |
+| 应用工厂 | 应用详情（门禁+审批） |
 |---|---|
-| ![应用详情](screenshots/03-app-detail.png) | ![试跑](screenshots/04-trial.png) |
+| ![应用工厂](screenshots/02-app-factory.png) | ![应用详情](screenshots/03-app-detail.png) |
 
-| 模型网关 | 运营/BadCase |
+| 运行调试（对话+轨迹） | 模型网关 |
 |---|---|
-| ![模型网关](screenshots/05-model-gateway.png) | ![运营](screenshots/06-ops.png) |
+| ![运行调试](screenshots/09-playground.png) | ![模型网关](screenshots/05-model-gateway.png) |
 
-| 知识中心 | 患者端（小程序联动） |
+| 运营 / BadCase | 知识中心 |
 |---|---|
-| ![知识](screenshots/07-knowledge.png) | ![患者端](screenshots/08-patient.png) |
+| ![运营](screenshots/06-ops.png) | ![知识](screenshots/07-knowledge.png) |
+
+| 患者端（小程序联动） |
+|---|
+| ![患者端](screenshots/08-patient.png) |
 
 ---
 
