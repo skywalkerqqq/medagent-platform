@@ -19,7 +19,7 @@
 | 院外开发者（§5/FR-62~66） | ⬜ 未做 | — | API Key/配额/计费/沙箱/文档站 |
 | 高级编排/MCP（§4 执行层） | ⬜ 未做 | 模型/知识/工具抽象已预留 | LangGraph 封装、MCP Gateway、沙箱 |
 | AgentHub v1.2 能力吸收 | ✅ POC | 长期记忆：session/auto 写入、64 维向量检索、运行/会话记录 | FAQ、客服工作台、SSE 实时、Dify live |
-| 工业门槛（§7~10） | 🟡 POC | **FastAPI 边缘 + Docker Compose + 健康检查 + 安全响应头/限流 + 备份 + TLS 模板 + 压测基线**；Token/权限/审计/安全阻断 | PostgreSQL（迁移工具已就绪、运行时未接线）、K8s、SSO、等保、压测、HA/容灾 |
+| 工业门槛（§7~10） | 🟡 POC | **FastAPI 边缘 + Docker Compose + 健康检查 + 安全响应头/限流 + 备份 + TLS 模板 + 压测基线**；Token/权限/审计/安全阻断 | PostgreSQL（迁移工具 + 运行时兼容层实验性；未真实验证）、K8s、SSO、等保、压测、HA/容灾 |
 
 图例：✅ 已实现可演示 ｜ 🟡 部分实现（POC 边界）｜ ⬜ 未实现。
 

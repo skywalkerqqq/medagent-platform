@@ -17,7 +17,7 @@
 | 审计哈希链 | ✅ | `/api/audit/verify`；WORM/异地仍待等保阶段 |
 | 备份脚本 | ✅ | `deploy/backup.ps1`、`deploy/backup.sh`（SQLite online backup + SHA256） |
 | TLS 反代模板 | 🟡 | `deploy/nginx`，需院方证书；未启用 HTTP/2 优化与 WAF |
-| PostgreSQL | 🟡 | 迁移工具 `production/migrate_to_pg.py`（导出/DDL/导入/对账）已就绪；**运行时未接线 PG** |
+| PostgreSQL | 🟡 | 迁移工具 + 运行时兼容层（`DATABASE_URL`，实验性）；**未在真实 PG 验证**，默认仍 SQLite |
 | SSO / 等保 / WAF / 限流 | ⬜ | 未实现 |
 | HA / 多副本 / 压测 | ⬜ | SQLite 单写限制，需先迁移 PG |
 
@@ -61,6 +61,7 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `MEDAGENT_DB` | 否 | SQLite 路径，默认 `/app/data/medagent.db` |
+| `DATABASE_URL` | 否 | 设置后启用实验性 PG 运行时；未验证前勿用于生产（见 postgres-runtime-switch.md） |
 | `RATE_LIMIT_RPS` / `RATE_LIMIT_BURST` | 否 | 令牌桶限流；0=关闭；Compose 默认 20/40 |
 | `TRUST_PROXY` | 否 | 1=信任 X-Forwarded-For（仅 app 在可信反代后方时） |
 | `ENABLE_HSTS` | 否 | 1=输出 HSTS 头（仅 HTTPS 入口） |

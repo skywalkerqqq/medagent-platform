@@ -428,7 +428,10 @@ def future(hours: int) -> str:
     return iso(now() + timedelta(hours=hours))
 
 
-def connect(path) -> sqlite3.Connection:
+def connect(path=None):
+    import pg_compat
+    if pg_compat.enabled():
+        return pg_compat.connect()
     conn = sqlite3.connect(str(path), timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
@@ -436,14 +439,19 @@ def connect(path) -> sqlite3.Connection:
     return conn
 
 
-def init_db(path, reset: bool = False) -> sqlite3.Connection:
+def init_db(path, reset: bool = False):
     global DB_PATH
     path = Path(path)
     DB_PATH = str(path.resolve())
+    path.parent.mkdir(parents=True, exist_ok=True)
+    import pg_compat
+    if pg_compat.enabled():
+        # Stage 2 实验：PG 运行时；reset=True 会 DROP public schema（仅专用测试/迁移库）
+        pg_compat.init_schema(SCHEMA_SQL, reset=reset)
+        return pg_compat.connect()
     if reset:
         for suffix in ("", "-wal", "-shm"):
             Path(str(path) + suffix).unlink(missing_ok=True)
-    path.parent.mkdir(parents=True, exist_ok=True)
     conn = connect(path)
     conn.executescript(SCHEMA_SQL)
     conn.commit()

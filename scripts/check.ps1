@@ -29,6 +29,7 @@ $suites = @(
     "tests/test_notify.py",
     "tests/test_production_import.py",
     "tests/test_pg_migration.py",
+    "tests/test_pg_compat.py",
     "tests/test_rate_limit.py"
 )
 foreach ($suite in $suites) {
@@ -63,6 +64,7 @@ if ($testCode -eq 0 -and $jsCode -eq 0) {
     Pop-Location
     exit 1
 }
+
 
 
 
