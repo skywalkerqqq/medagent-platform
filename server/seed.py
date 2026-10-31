@@ -189,12 +189,23 @@ def seed(conn) -> bool:
     ).lastrowid
     report_config = dict(templates_mod.TEMPLATES["med-report"]["config"])
     report_config.update({"prompt_version": 1, "template_version": 1})
-    conn.execute(
+    app_report = conn.execute(
         """INSERT INTO apps(code, name, template_key, template_version, owner_id, department, status,
                risk_level, config, current_version, created_at, updated_at)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
         ("APP-0003", "影像报告初稿演示", "med-report", 1, "u_creator", "心血管内科",
          "draft", "medium", json.dumps(report_config, ensure_ascii=False), 0, db.iso(), db.iso()),
+    ).lastrowid
+    conn.execute(
+        """INSERT INTO report_drafts(code, app_id, patient_ref, exam_type, findings_original, findings,
+               impression_original, impression, recommendation_original, recommendation,
+               missing_fields, status, created_by, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        ("RPT-0001", app_report, "P0001", "胸部 CT",
+         "右肺上叶结节 8mm，边界清楚", "右肺上叶结节 8mm，边界清楚",
+         "考虑右肺上叶小结节，建议结合临床", "考虑右肺上叶小结节，建议结合临床",
+         "建议 6–12 个月随访复查", "建议 6–12 个月随访复查", "[]",
+         "draft", "u_doctor", db.iso(), db.iso()),
     )
     snapshot = {
         "app_id": app_knowledge, "config": knowledge_config, "template_key": "med-knowledge",

@@ -97,6 +97,16 @@
 | GET | /api/patient/followups | 仅授权随访 |
 | POST | /api/patient/followups/{id}/submit | `{answers:{}}`；危险信号→200 `{risk_flag:true,handoff:true,...}` |
 
+## 7.5 报告编辑
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | /api/reports | report:read | 报告草稿列表（app_id/status/q） |
+| POST | /api/reports/draft | report:write | `{app_id(med-report), exam_type, findings, patient_ref?}` → 草稿 |
+| GET | /api/reports/{id} | report:read | 详情 |
+| PUT | /api/reports/{id} | report:write | 编辑所见/印象/建议（仅 draft） |
+| POST | /api/reports/{id}/sign | report:write | 签名；记录编辑人/时间/修改率，已签名不可改 |
+
 ## 8. 错误码
 
 | code | HTTP | 含义 |

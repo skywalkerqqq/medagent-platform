@@ -60,6 +60,28 @@ CREATE TABLE IF NOT EXISTS knowledge_docs (
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS report_drafts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE,
+    app_id INTEGER,
+    patient_ref TEXT,
+    exam_type TEXT,
+    findings_original TEXT,
+    findings TEXT,
+    impression_original TEXT,
+    impression TEXT,
+    recommendation_original TEXT,
+    recommendation TEXT,
+    missing_fields TEXT,                -- JSON array
+    status TEXT DEFAULT 'draft',        -- draft | signed
+    editor_id TEXT,
+    edit_rate REAL,
+    created_by TEXT,
+    created_at TEXT,
+    updated_at TEXT,
+    signed_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS faqs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT NOT NULL,
@@ -325,6 +347,7 @@ CREATE INDEX IF NOT EXISTS idx_eval_cases_ds ON eval_cases(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_eval_results_run ON eval_results(run_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_status ON knowledge_docs(status);
 CREATE INDEX IF NOT EXISTS idx_faqs_status ON faqs(status);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON report_drafts(status);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_calls_app ON model_calls(app_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_bindings_user ON patient_bindings(user_id, status);

@@ -513,6 +513,38 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["status"], "ok")
 
+    def test_26_report_editor(self):
+        doctor = self.token("u_doctor")
+        status, listing = request("GET", "/api/reports?limit=100", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(listing["total"], 1)  # 种子 RPT-0001
+        status, report = request("POST", "/api/reports/draft", {
+            "app_id": 3, "exam_type": "胸部 CT",
+            "findings": "右肺下叶结节 5mm，边界清楚", "patient_ref": "P0001",
+        }, token=doctor)
+        self.assertEqual(status, 201, report)
+        report_id = report["id"]
+        self.assertEqual(report["status"], "draft")
+        self.assertIn("findings", report)
+        status, updated = request("PUT", f"/api/reports/{report_id}", {
+            "impression": "考虑右肺下叶小结节，建议结合临床",
+            "recommendation": "建议 6 个月随访复查",
+        }, token=doctor)
+        self.assertEqual(status, 200)
+        status, signed = request("POST", f"/api/reports/{report_id}/sign", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertEqual(signed["status"], "signed")
+        self.assertGreater(signed["edit_rate"], 0, signed)
+        self.assertEqual(signed["editor_id"], "u_doctor")
+        status, again = request("POST", f"/api/reports/{report_id}/sign", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertEqual(again["status"], "signed")
+        status, _ = request("GET", f"/api/reports/{report_id}", token=self.token("u_patient"))
+        self.assertEqual(status, 403)
+        admin = self.token("u_admin")
+        status, audit = request("GET", "/api/audit?limit=100", token=admin)
+        self.assertIn("签名报告", {item["action"] for item in audit["items"]})
+
     def test_21_memory_crud_and_injection(self):
         creator = self.token("u_creator")
         status, memories = request("GET", "/api/memories?limit=100", token=creator)

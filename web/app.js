@@ -14,6 +14,7 @@ const NAV = [
     { key: 'dashboard', label: '总览 / 验收', icon: 'dashboard', path: '/dashboard' },
     { key: 'apps', label: '应用工厂', icon: 'layers', path: '/apps' },
     { key: 'playground', label: '运行调试', icon: 'chat', path: '/playground' },
+    { key: 'reports', label: '报告编辑', icon: 'file', path: '/reports' },
   ] },
   { group: '能力', items: [
     { key: 'knowledge', label: '知识中心', icon: 'book', path: '/knowledge' },
@@ -42,6 +43,7 @@ const ICON_PATHS = {
   arrow: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
   refresh: '<path d="M20 11A8 8 0 1 0 18.4 16"/><path d="M20 4v7h-7"/>',
   brain: '<path d="M9.5 3a3 3 0 0 0-3 3v1.2A3 3 0 0 0 4 10v1a3 3 0 0 0 1.5 2.6V15a3 3 0 0 0 4.5 2.6V3z"/><path d="M14.5 3a3 3 0 0 1 3 3v1.2A3 3 0 0 1 20 10v1a3 3 0 0 1-1.5 2.6V15a3 3 0 0 1-4.5 2.6V3z"/>',
+  file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h6"/>',
 };
 
 function icon(name, size = 18) {
@@ -54,6 +56,7 @@ const TITLES = {
   '/dashboard': ['总览 / 验收', '工作台 / 总览'],
   '/apps': ['应用工厂', '工作台 / 应用工厂'],
   '/playground': ['运行调试', '工作台 / 运行调试'],
+  '/reports': ['报告编辑', '工作台 / 报告编辑'],
   '/knowledge': ['知识中心', '能力 / 知识中心'],
   '/memory': ['记忆', '能力 / 长期记忆'],
   '/models': ['模型网关', '能力 / 模型网关'],
@@ -193,6 +196,7 @@ function route() {
     '/dashboard': renderDashboard,
     '/apps': renderApps,
     '/playground': renderPlayground,
+    '/reports': renderReports,
     '/knowledge': renderKnowledge,
     '/memory': renderMemory,
     '/models': renderModels,
@@ -873,6 +877,120 @@ async function saveMemoryConfig() {
   } catch (error) { toast(error.message, 'error'); }
 }
 
+/* ---------------------------------------------------------------- 报告编辑 */
+let reportSelected = null;
+
+async function renderReports(view) {
+  view.innerHTML = '<div class="card">加载中…</div>';
+  try {
+    const [reportData, apps] = await Promise.all([api('/api/reports?limit=100'), api('/api/apps')]);
+    const reportApps = apps.items.filter((app) => app.template_key === 'med-report');
+    const canWrite = has('report:write');
+    let selected = reportData.items.find((item) => item.id === reportSelected) || reportData.items[0] || null;
+    if (selected) reportSelected = selected.id;
+    view.innerHTML = `
+      <div class="grid grid-2">
+        <div class="card">
+          <h3 class="section-title">生成报告草稿</h3>
+          <p class="section-sub">仅“报告初稿助手”模板可生成；输出 JSON → 医生编辑 → 签名，签名时计算修改率。</p>
+          ${canWrite ? `<form id="report-form">
+            <div class="form-row">
+              <label class="field"><span>报告应用</span><select id="report-app">
+                ${reportApps.map((app) => `<option value="${app.id}">${esc(app.name)}（${statusText(app.status)}）</option>`).join('') || '<option value="">暂无报告应用</option>'}
+              </select></label>
+              <label class="field"><span>检查类型</span><input id="report-exam" value="胸部 CT" /></label>
+            </div>
+            <div class="form-row">
+              <label class="field"><span>患者标识（可选，脱敏）</span><input id="report-patient" placeholder="P0001" /></label>
+            </div>
+            <label class="field"><span>结构化所见 / 输入</span><textarea id="report-findings" placeholder="右肺上叶结节 8mm，边界清楚">右肺上叶结节 8mm，边界清楚</textarea></label>
+            <button class="btn btn-primary" type="submit">生成草稿</button>
+          </form>` : '<div class="alert amber">当前角色无报告编辑权限（可用 u_doctor / u_creator 演示）。</div>'}
+        </div>
+        <div class="card">
+          <h3 class="section-title">报告编辑器</h3>
+          ${selected ? `
+            <div class="btn-row" style="justify-content:space-between;margin-bottom:10px">
+              <div><strong>${esc(selected.code)}</strong> ${statusPill(selected.status)}
+                <span class="small muted">${esc(selected.exam_type)} · 患者 ${esc(selected.patient_ref || '—')}</span></div>
+              ${selected.status === 'signed' ? `<span class="small muted">修改率 ${selected.edit_rate !== null ? Math.round(selected.edit_rate * 100) + '%' : '—'} · 签名人 ${esc(selected.editor_id || '')}</span>` : ''}
+            </div>
+            <label class="field"><span>检查所见</span><textarea id="rpt-findings" ${selected.status === 'signed' ? 'disabled' : ''}>${esc(selected.findings)}</textarea></label>
+            <label class="field"><span>印象</span><textarea id="rpt-impression" ${selected.status === 'signed' ? 'disabled' : ''}>${esc(selected.impression)}</textarea></label>
+            <label class="field"><span>建议</span><textarea id="rpt-recommendation" ${selected.status === 'signed' ? 'disabled' : ''}>${esc(selected.recommendation)}</textarea></label>
+            ${selected.missing_fields.length ? `<div class="alert amber">缺失字段提示：${esc(selected.missing_fields.join('、'))}</div>` : ''}
+            ${selected.status === 'draft' && canWrite ? `<div class="btn-row">
+              <button class="btn btn-outline" onclick="MA.saveReport()">保存修改</button>
+              <button class="btn btn-primary" onclick="MA.signReport()">签名生效</button>
+            </div>` : '<div class="alert green">已签名：报告不可再修改，修改率已记录。</div>'}
+          ` : '<div class="muted small">左侧生成一份报告草稿，或从下方列表打开。</div>'}
+        </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">报告草稿列表 <span class="muted small">（${reportData.total}）</span></h3>
+        <div class="table-wrap"><table><thead><tr><th>编号</th><th>检查类型</th><th>患者</th><th>状态</th><th>修改率</th><th>创建人</th><th>时间</th><th></th></tr></thead><tbody>
+          ${reportData.items.map((item) => `<tr>
+            <td class="mono">${esc(item.code)}</td><td>${esc(item.exam_type)}</td><td>${esc(item.patient_ref || '—')}</td>
+            <td>${statusPill(item.status === 'signed' ? 'published' : 'draft')}</td>
+            <td>${item.edit_rate === null ? '—' : `${Math.round(item.edit_rate * 100)}%`}</td>
+            <td class="small mono">${esc(item.created_by)}</td><td class="small muted">${esc(item.updated_at)}</td>
+            <td><button class="btn btn-outline btn-sm" onclick="MA.openReport(${item.id})">打开</button></td></tr>`).join('') || '<tr><td colspan="8" class="muted">暂无报告草稿</td></tr>'}
+        </tbody></table></div>
+      </div>`;
+    if (canWrite) {
+      $('#report-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await generateReportDraft();
+      });
+    }
+  } catch (error) {
+    view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function generateReportDraft() {
+  const appId = Number($('#report-app')?.value);
+  if (!appId) { toast('请先创建报告初稿应用', 'error'); return; }
+  const findings = $('#report-findings').value.trim();
+  if (!findings) { toast('请输入所见', 'error'); return; }
+  try {
+    const report = await api('/api/reports/draft', { method: 'POST', body: {
+      app_id: appId, exam_type: $('#report-exam').value.trim(), findings,
+      patient_ref: $('#report-patient').value.trim(),
+    } });
+    reportSelected = report.id;
+    toast(`已生成 ${report.code}`);
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function openReport(id) {
+  reportSelected = Number(id);
+  route();
+}
+
+async function saveReport() {
+  if (!reportSelected) return;
+  try {
+    await api(`/api/reports/${reportSelected}`, { method: 'PUT', body: {
+      findings: $('#rpt-findings').value, impression: $('#rpt-impression').value,
+      recommendation: $('#rpt-recommendation').value,
+    } });
+    toast('报告草稿已保存');
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function signReport() {
+  if (!reportSelected) return;
+  if (!window.confirm('签名后报告不可修改，确认签名？')) return;
+  try {
+    const report = await api(`/api/reports/${reportSelected}/sign`, { method: 'POST' });
+    toast(report.edit_rate !== null ? `签名完成，修改率 ${Math.round(report.edit_rate * 100)}%` : '签名完成');
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
 /* ---------------------------------------------------------------- 知识中心 */
 async function renderKnowledge(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
@@ -1507,6 +1625,7 @@ window.MA = {
   pgCloseSession, searchMemory,
   memoryToggle, memoryDelete,
   searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, testPolicy, runEval, showEvalRun,
+  generateReportDraft, openReport, saveReport, signReport,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,
 };
