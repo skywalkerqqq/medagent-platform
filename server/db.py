@@ -268,10 +268,37 @@ CREATE TABLE IF NOT EXISTS memories (
     status TEXT DEFAULT 'active',       -- active | deleted
     use_count INTEGER DEFAULT 0,
     content_hash TEXT,
+    embedding TEXT,                     -- 64 维 bigram 向量（JSON）
     created_at TEXT,
     updated_at TEXT,
     last_used_at TEXT,
     expires_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER,
+    user_id TEXT,
+    status TEXT DEFAULT 'open',         -- open | closed
+    summary_memory_id INTEGER,
+    created_at TEXT,
+    closed_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS runs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    app_id INTEGER,
+    session_id INTEGER,
+    user_id TEXT,
+    input TEXT,
+    output TEXT,
+    status TEXT DEFAULT 'succeeded',
+    degraded INTEGER DEFAULT 0,
+    tokens INTEGER DEFAULT 0,
+    cost REAL DEFAULT 0,
+    latency_ms INTEGER DEFAULT 0,
+    memory_written INTEGER DEFAULT 0,
+    created_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth_sessions(user_id);
@@ -288,6 +315,9 @@ CREATE INDEX IF NOT EXISTS idx_reports_patient ON reports(patient_ref);
 CREATE INDEX IF NOT EXISTS idx_followups_patient ON followup_tasks(patient_ref, status);
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, owner, status);
 CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
+CREATE INDEX IF NOT EXISTS idx_sessions_app ON sessions(app_id, user_id, status);
+CREATE INDEX IF NOT EXISTS idx_runs_app ON runs(app_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id);
 """
 
 

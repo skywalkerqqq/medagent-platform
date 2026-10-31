@@ -7,6 +7,7 @@ import common
 import db
 import engine
 import knowledge
+import memory
 import templates as templates_mod
 
 
@@ -135,9 +136,14 @@ def update_app(ctx):
     if app["status"] not in ("draft", "testing"):
         raise common.ApiError(409, "conflict", "仅草稿/测试状态可编辑，已提交发布的应用不可改")
     config = _config(app)
-    for key in ("model_policy", "knowledge_scope", "channels", "temperature", "memory_enabled"):
+    for key in ("model_policy", "knowledge_scope", "channels", "temperature",
+                "memory_enabled", "memory_write_mode", "memory_search_mode"):
         if key in body:
             config[key] = body[key]
+    if config.get("memory_write_mode") not in (None, "off", "session", "auto"):
+        raise common.ApiError(400, "validation", "memory_write_mode 只能是 off/session/auto")
+    if config.get("memory_search_mode") not in (None, "vector", "bigram"):
+        raise common.ApiError(400, "validation", "memory_search_mode 只能是 vector/bigram")
     if config.get("model_policy") and not conn.execute(
             "SELECT 1 FROM model_policies WHERE key=?", (config["model_policy"],)).fetchone():
         raise common.ApiError(400, "validation", "模型策略不存在")
@@ -150,6 +156,70 @@ def update_app(ctx):
     return 200, _app_json(conn, conn.execute("SELECT * FROM apps WHERE id=?", (app["id"],)).fetchone(), detail=True)
 
 
+def _session(conn, session_id, user):
+    session = conn.execute("SELECT * FROM sessions WHERE id=?", (int(session_id),)).fetchone()
+    if not session:
+        raise common.ApiError(404, "not_found", "会话不存在")
+    if session["user_id"] != user["id"] and user["role"] != "admin":
+        raise common.ApiError(403, "forbidden", "无权访问该会话")
+    return session
+
+
+def create_session(ctx):
+    conn, user = ctx["conn"], ctx["user"]
+    app = _load(conn, ctx["params"]["id"], user)
+    common.require(user, "app:trial", "无试跑权限")
+    session_id = conn.execute(
+        "INSERT INTO sessions(app_id, user_id, status, created_at) VALUES (?,?,?,?)",
+        (app["id"], user["id"], "open", db.iso()),
+    ).lastrowid
+    common.audit(conn, user["id"], "创建调试会话", "session", session_id, f"应用 {app['id']}")
+    conn.commit()
+    return 201, {"session_id": session_id, "app_id": app["id"], "status": "open"}
+
+
+def close_session(ctx):
+    conn, user = ctx["conn"], ctx["user"]
+    session = _session(conn, ctx["params"]["id"], user)
+    if session["status"] == "closed":
+        return 200, {"session_id": session["id"], "status": "closed", "memory_id": session["summary_memory_id"],
+                     "note": "会话已关闭"}
+    app = conn.execute("SELECT * FROM apps WHERE id=?", (session["app_id"],)).fetchone()
+    config = _config(app)
+    mode = config.get("memory_write_mode") or "off"
+    runs = conn.execute("SELECT * FROM runs WHERE session_id=? ORDER BY id", (session["id"],)).fetchall()
+    memory_id = None
+    if mode == "session" and runs:
+        memory_id = memory.write_summary(conn, app["id"], session["user_id"], runs, "session", mode)
+        if memory_id:
+            conn.execute("UPDATE runs SET memory_written=1 WHERE session_id=?", (session["id"],))
+    conn.execute("UPDATE sessions SET status='closed', summary_memory_id=?, closed_at=? WHERE id=?",
+                 (memory_id, db.iso(), session["id"]))
+    common.audit(conn, user["id"], "结束调试会话", "session", session["id"],
+                 f"模式={mode} runs={len(runs)} memory={memory_id}")
+    conn.commit()
+    return 200, {"session_id": session["id"], "status": "closed", "write_mode": mode,
+                 "runs": len(runs), "memory_id": memory_id}
+
+
+def list_runs(ctx):
+    common.require(ctx["user"], "metrics:read")
+    query = ctx["query"]
+    where, params = [], []
+    if query.get("app_id"):
+        where.append("app_id=?")
+        params.append(common.int_field(query["app_id"], "app_id", minimum=1))
+    if query.get("session_id"):
+        where.append("session_id=?")
+        params.append(common.int_field(query["session_id"], "session_id", minimum=1))
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    limit, offset = common.pagination(query)
+    rows = ctx["conn"].execute(
+        f"""SELECT r.*, a.name AS app_name FROM runs r LEFT JOIN apps a ON a.id=r.app_id
+            {clause} ORDER BY r.id DESC LIMIT ? OFFSET ?""", params + [limit, offset]).fetchall()
+    return 200, {"items": [dict(row) for row in rows]}
+
+
 def trial(ctx):
     conn, user, body = ctx["conn"], ctx["user"], ctx["body"]
     app = _load(conn, ctx["params"]["id"], user)
@@ -159,14 +229,50 @@ def trial(ctx):
     query = common.str_field(body.get("query") or body.get("content"), "query", required=True)
     if len(query) > 4000:
         raise common.ApiError(400, "validation", "输入过长（≤4000 字）")
+    session_id = body.get("session_id")
+    if session_id:
+        session = _session(conn, session_id, user)
+        if session["app_id"] != app["id"]:
+            raise common.ApiError(400, "validation", "session 与应用不匹配")
+        if session["status"] == "closed":
+            raise common.ApiError(409, "conflict", "会话已结束，请新建会话")
+        session_id = session["id"]
+    else:
+        session_id = conn.execute(
+            "INSERT INTO sessions(app_id, user_id, status, created_at) VALUES (?,?,?,?)",
+            (app["id"], user["id"], "open", db.iso()),
+        ).lastrowid
     result = engine.generate(conn, app, query, user["department"] or "", user_id=user["id"])
+    run_id = conn.execute(
+        """INSERT INTO runs(app_id, session_id, user_id, input, output, status, degraded, tokens, cost,
+               latency_ms, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+        (app["id"], session_id, user["id"], query, result["output"], "succeeded",
+         1 if result["degraded"] else 0, result["tokens"], result["cost"], result["latency_ms"], db.iso()),
+    ).lastrowid
+    config = _config(app)
+    write_mode = config.get("memory_write_mode") or "off"
+    if write_mode == "auto":
+        memory_id = memory.write_summary(conn, app["id"], user["id"],
+                                        [{"input": query, "output": result["output"]}], "run", "auto")
+        if memory_id:
+            conn.execute("UPDATE runs SET memory_written=1 WHERE id=?", (run_id,))
+            result["trace"].append({"type": "memory", "name": "自动写入摘要", "status": "succeeded",
+                                    "detail": f"运行后自动写入摘要记忆 #{memory_id}", "latency_ms": 5})
+            result["memory"]["auto_written"] = True
+            result["memory"]["memory_id"] = memory_id
+        else:
+            result["memory"]["auto_written"] = False
     if app["status"] == "draft":
         conn.execute("UPDATE apps SET status='testing', updated_at=? WHERE id=?", (db.iso(), app["id"]))
-    common.audit(conn, user["id"], "试跑应用", "app", app["id"], f"{len(query)} 字，降级={result['degraded']}")
+    common.audit(conn, user["id"], "试跑应用", "app", app["id"],
+                 f"{len(query)} 字，降级={result['degraded']}，run={run_id}")
     conn.commit()
     return 200, {
         "app": {"id": app["id"], "name": app["name"], "status": conn.execute(
             "SELECT status FROM apps WHERE id=?", (app["id"],)).fetchone()["status"]},
+        "run_id": run_id,
+        "session_id": session_id,
+        "memory_write_mode": write_mode,
         **result,
     }
 
@@ -399,6 +505,9 @@ ROUTES = [
     ("PUT", re.compile(r"^/api/apps/(?P<id>\d+)$"), update_app),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/trial$"), trial),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/feedback$"), feedback),
+    ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/sessions$"), create_session),
+    ("POST", re.compile(r"^/api/sessions/(?P<id>\d+)/close$"), close_session),
+    ("GET", re.compile(r"^/api/runs$"), list_runs),
     ("GET", re.compile(r"^/api/apps/(?P<id>\d+)/release-check$"), release_check),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/submit$"), submit),
     ("POST", re.compile(r"^/api/apps/(?P<id>\d+)/disable$"), disable),

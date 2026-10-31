@@ -61,7 +61,8 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
         raise common.ApiError(400, "template_missing", "不支持的模板")
 
     if config.get("memory_enabled") and user_id:
-        memory_hits = memory.retrieve(conn, app["id"], user_id, query)
+        search_mode = config.get("memory_search_mode") or "vector"
+        memory_hits = memory.retrieve(conn, app["id"], user_id, query, mode=search_mode)
         if memory_hits:
             memory.mark_used(conn, [item["id"] for item in memory_hits])
             block = "\n".join(f"- {item['content']}" for item in memory_hits)
@@ -153,5 +154,6 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
         "trace": trace,
         "memory": {"enabled": bool(config.get("memory_enabled")),
                    "injected": len(memory_hits),
+                   "search_mode": config.get("memory_search_mode") or "vector",
                    "use_count": sum(item.get("use_count", 0) for item in memory_hits)},
     }

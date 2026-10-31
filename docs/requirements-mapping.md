@@ -54,6 +54,9 @@
 | 四类记忆 | ✅ | preference / fact / summary / instruction |
 | 去重 | ✅ | scope+owner+type+content 哈希；重复创建返回 200 并更新重要度 |
 | 治理 | ✅ | 软删/停用/启用；硬删仅管理员；过期时间；使用计数 |
+| 写入模式 | ✅ | `off` / `session`（结束会话写摘要）/ `auto`（运行后自动写摘要） |
+| 向量检索 | ✅ | 64 维 bigram 哈希向量 L2 归一化，余弦 + 关键词加权；`/api/memories/search?mode=vector` |
+| 运行/会话记录 | ✅ | `runs` / `sessions`；自动/会话摘要关联 run/session；运营台可查 |
 | 试跑注入 | ✅ | 应用配置 `memory_enabled=true` 时检索 Top3，输出标注「结合历史记忆」，写入 `memory` 执行轨迹，累计 use_count |
 | 权限 | ✅ | memory:read/write 按角色；患者无临床记忆权限 |
 | 患者端隔离 | ✅ | 患者端不使用临床记忆 |

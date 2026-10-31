@@ -419,7 +419,57 @@ class MediAgentV11Test(unittest.TestCase):
         status, audit = request("GET", "/api/audit?limit=100", token=admin)
         self.assertIn("微信登录", {item["action"] for item in audit["items"]})
 
-    def test_20_server_stable(self):
+    def test_22_memory_modes_session_auto_and_vector(self):
+        doctor = self.token("u_doctor")
+        # auto 模式：运行后自动写入摘要（app1 种子配置 memory_write_mode=auto）
+        status, trial = request("POST", "/api/apps/1/trial",
+                                {"query": "华法林 INR 监测频率如何把握"}, token=doctor)
+        self.assertEqual(status, 200)
+        self.assertEqual(trial["memory_write_mode"], "auto")
+        self.assertTrue(trial["memory"]["auto_written"], trial["memory"])
+        auto_memory_id = trial["memory"]["memory_id"]
+        status, memories = request("GET", "/api/memories?scope=agent&type=summary&limit=100", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertTrue(any(item["id"] == auto_memory_id for item in memories["items"]))
+        self.assertTrue(any("运行摘要" in item["content"] for item in memories["items"]))
+
+        # session 模式：会话结束写摘要
+        creator = self.token("u_creator")
+        status, app = request("POST", "/api/apps", {"name": "记忆会话测试应用", "template_key": "med-knowledge"}, token=creator)
+        self.assertEqual(status, 201)
+        app_id = app["id"]
+        status, updated = request("PUT", f"/api/apps/{app_id}", {
+            "memory_write_mode": "session", "memory_search_mode": "vector", "memory_enabled": True,
+        }, token=creator)
+        self.assertEqual(status, 200, updated)
+        status, trial = request("POST", f"/api/apps/{app_id}/trial",
+                                {"query": "社区获得性肺炎疗程多久"}, token=creator)
+        self.assertEqual(status, 200)
+        self.assertFalse(trial["memory"].get("auto_written", False))
+        session_id = trial["session_id"]
+        status, closed = request("POST", f"/api/sessions/{session_id}/close", token=creator)
+        self.assertEqual(status, 200, closed)
+        self.assertEqual(closed["write_mode"], "session")
+        self.assertIsNotNone(closed["memory_id"])
+        status, memories = request("GET", "/api/memories?scope=user&type=summary&limit=100", token=creator)
+        self.assertTrue(any("会话摘要" in item["content"] for item in memories["items"]))
+        status, again = request("POST", f"/api/sessions/{session_id}/close", token=creator)
+        self.assertEqual(status, 200)
+        self.assertEqual(again["status"], "closed")
+
+        # 64 维向量检索
+        status, vector = request("GET", "/api/memories/search?q=抗感染&mode=vector", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(vector["total"], 1)
+        self.assertGreater(vector["items"][0]["score"], 0)
+        status, bigram = request("GET", "/api/memories/search?q=抗感染&mode=bigram", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(bigram["total"], 1)
+        status, listing = request("GET", "/api/memories?limit=100", token=doctor)
+        self.assertEqual(listing["embedding_dim"], 64)
+        self.assertGreaterEqual(listing["stats"]["with_embedding"], 1)
+
+    def test_23_server_stable(self):
         status, payload = request("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["status"], "ok")

@@ -25,8 +25,12 @@
 | GET | /api/apps | 登录 | 列表；creator/dept 仅本部门 |
 | POST | /api/apps | app:create | `{name,template_key,department?}` → 201 应用（draft） |
 | GET | /api/apps/{id} | 可见 | 详情 + 发布检查 + 审批 + 版本 |
-| PUT | /api/apps/{id} | app:edit | 仅 draft/testing；`{model_policy?,knowledge_scope?,channels?,temperature?}` |
-| POST | /api/apps/{id}/trial | app:trial | `{query}` → 输出/引用/免责/版本/降级/安全 |
+| PUT | /api/apps/{id} | app:edit | 仅 draft/testing；`{model_policy?,knowledge_scope?,channels?,temperature?,memory_enabled?,memory_write_mode?,memory_search_mode?}` |
+| POST | /api/apps/{id}/trial | app:trial | `{query, session_id?}` → 输出/引用/免责/版本/降级/安全/执行轨迹/自动记忆；返回 run_id/session_id |
+| POST | /api/apps/{id}/feedback | app:trial | `{helpful,question,output,reason,comment}` → 无用进入 BadCase |
+| POST | /api/apps/{id}/sessions | app:trial | 创建调试会话 |
+| POST | /api/sessions/{id}/close | app:trial/管理员 | 结束会话；session 模式写摘要记忆 |
+| GET | /api/runs | metrics:read | 试跑运行记录（app_id/session_id 过滤） |
 | GET | /api/apps/{id}/release-check | 可见 | `{items:[{key,label,ok,detail}],ready}` |
 | POST | /api/apps/{id}/submit | app:submit | 门禁通过 → 404/409 `release_blocked`（含 details）→ 200 pending_dept |
 | POST | /api/apps/{id}/disable | approval:platform | 停用 |
@@ -117,8 +121,16 @@
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | GET | /api/memories | memory:read | 列表/统计；筛选 scope/type/status/q |
+| GET | /api/memories/search?q=&mode=vector\|bigram | memory:read | 64 维向量/关键词检索（返回 score） |
 | POST | /api/memories | memory:write | `{scope:user\|agent\|tenant, owner?, type, content, importance?, expires_at?}`；重复内容返回 200 `deduped=true` |
 | PUT | /api/memories/{id} | memory:write | 更新 content/importance/expires_at/status（非管理员仅 user 范围本人） |
 | DELETE | /api/memories/{id} | memory:write | 软删；`?hard=1` 仅管理员硬删 |
 
-试跑注入：应用配置 `memory_enabled=true` 时，检索 user=当前用户、agent=当前应用、tenant=default 的活跃未过期记忆 Top3，输出标注「结合历史记忆」，Trace 增加 `memory` 步骤并累计 `use_count`。患者端不使用临床记忆。
+试跑注入：应用配置 `memory_enabled=true` 时，按 `memory_search_mode`（vector/bigram）检索 user=当前用户、agent=当前应用、tenant=default 的活跃未过期记忆 Top3，输出标注「结合历史记忆」，Trace 增加 `memory` 步骤并累计 `use_count`。
+
+写入模式（应用 config `memory_write_mode`）：
+- `off`：不自动写；
+- `session`：`POST /api/sessions/{id}/close` 时汇总会话 runs 写 `user` 范围 summary；
+- `auto`：每次试跑后立即写 `agent` 范围 summary（`runs.memory_written=1`，Trace 增加“自动写入摘要”步骤）。
+
+患者端不使用临床记忆。

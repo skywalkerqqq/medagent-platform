@@ -449,6 +449,7 @@ async function pgSelect(view, appId) {
     const app = await api(`/api/apps/${appId}`);
     pg.app = app;
     pg.messages = [];
+    pg.sessionId = null;
     view.innerHTML = `
       <div class="pg-layout">
         <aside class="pg-side card">
@@ -487,7 +488,10 @@ async function pgSelect(view, appId) {
               <div class="pg-title">${esc(app.name)} <span class="pill ${app.status === 'published' ? 'green' : 'gray'}">${statusText(app.status)}</span></div>
               <div class="small muted">${esc(app.template_name)} v${app.template_version} · 模板/提示词/模型/知识版本随输出固定</div>
             </div>
-            <span class="pg-model">${esc(app.config.model_policy)}</span>
+            <div class="btn-row">
+              <span class="pg-model">记忆 ${esc(app.config.memory_write_mode || 'off')} / ${esc(app.config.memory_search_mode || 'vector')}</span>
+              <button class="btn btn-outline btn-sm" onclick="MA.pgCloseSession()">结束会话写入摘要</button>
+            </div>
           </div>
           <div class="pg-chat" id="pg-chat"></div>
           <div class="pg-composer">
@@ -574,6 +578,7 @@ function pgRender() {
         <div class="msg-meta">
           <span>${result.latency_ms}ms · ${result.tokens} tokens</span>
           <span>模型 ${esc(result.versions.model || '—')} · 策略 ${esc(result.versions.model_policy)}</span>
+          ${result.memory && result.memory.auto_written ? `<span class="pill teal">运行后自动写入记忆</span>` : ''}
           <span>免责：${esc(result.disclaimer)}</span>
         </div>
         <details class="trace">
@@ -615,7 +620,8 @@ async function pgSend() {
   input.value = '';
   pgRender();
   try {
-    const result = await api(`/api/apps/${pg.app.id}/trial`, { method: 'POST', body: { query: text } });
+    const result = await api(`/api/apps/${pg.app.id}/trial`, { method: 'POST', body: { query: text, session_id: pg.sessionId } });
+    if (result.session_id) pg.sessionId = result.session_id;
     pg.messages.pop();
     pg.messages.push({ role: 'assistant', result, question: text });
   } catch (error) {
@@ -635,6 +641,24 @@ function pgReset() {
   if (pg.app) {
     pg.messages = [];
     pgRender();
+  }
+}
+
+async function pgCloseSession() {
+  if (!pg.sessionId) {
+    toast('请先发送一条消息（会自动创建会话）', 'error');
+    return;
+  }
+  try {
+    const result = await api(`/api/sessions/${pg.sessionId}/close`, { method: 'POST' });
+    if (result.memory_id) {
+      toast(`会话摘要已写入记忆 #${result.memory_id}`);
+    } else {
+      toast(`会话已结束（写入模式：${result.write_mode}，未写入记忆）`);
+    }
+    pg.sessionId = null;
+  } catch (error) {
+    toast(error.message, 'error');
   }
 }
 
@@ -700,7 +724,7 @@ async function renderAppDetail(view, id) {
           <div class="small"><b>知识范围：</b>${(app.config.knowledge_scope || []).join('、')}</div>
           <div class="small"><b>渠道：</b>${(app.config.channels || []).join('、')}</div>
           <div class="small"><b>风险等级：</b>${esc(app.risk_level)}</div>
-          <div class="small"><b>长期记忆：</b>${app.config.memory_enabled ? '<span class="pill green">已开启</span>（试跑注入 user/agent/tenant 相关记忆）' : '<span class="pill gray">未开启</span>'}</div>
+          <div class="small"><b>长期记忆：</b>${app.config.memory_enabled ? '<span class="pill green">已开启</span>' : '<span class="pill gray">未开启</span>'} · 写入 ${esc(app.config.memory_write_mode || 'off')} · 检索 ${esc(app.config.memory_search_mode || 'vector')}</div>
           <div class="small"><b>模板/提示词版本：</b>v${app.template_version}</div>
           <div class="small muted" style="margin-top:10px">发布版本会固定模板/提示词/模型/知识/评测集/审批记录（FR-005、6.4）。</div>
           <h3 class="section-title" style="margin-top:18px">版本历史</h3>
@@ -918,7 +942,7 @@ async function renderMemory(view) {
         ${kpi('记忆总数', data.stats.total, '含已删除', 'teal')}
         ${kpi('活跃记忆', data.stats.active, '参与试跑注入', 'green')}
         ${kpi('累计使用', data.stats.total_use, '被注入次数', 'amber')}
-        ${kpi('类别', Object.keys(data.stats.by_type).length, Object.keys(data.stats.by_type).map((k) => MEMORY_TYPE_LABELS[k] || k).join(' / '), 'violet')}
+        ${kpi('向量化', `${data.stats.with_embedding || 0}/${data.stats.total}`, `${data.embedding_dim || 64} 维 bigram 向量`, 'violet')}
       </div>
       <div class="grid grid-2" style="margin-top:20px">
         ${canWrite ? `<div class="card">
@@ -959,8 +983,16 @@ async function renderMemory(view) {
       <div class="card">
         <div class="btn-row" style="justify-content:space-between;margin-bottom:12px">
           <h3 class="section-title" style="margin:0">记忆清单 <span class="muted small">（${data.total}）</span></h3>
-          <div class="search-box">${icon('search', 15)}<input id="mem-filter" placeholder="筛选记忆内容" /></div>
+          <div class="btn-row">
+            <select id="mem-mode" style="width:130px">
+              <option value="vector">向量（64 维）</option>
+              <option value="bigram">关键词（bigram）</option>
+            </select>
+            <div class="search-box">${icon('search', 15)}<input id="mem-filter" placeholder="检索记忆，回车" /></div>
+            <button class="btn btn-outline btn-sm" onclick="MA.searchMemory()">检索</button>
+          </div>
         </div>
+        <div id="mem-search-result"></div>
         <div class="table-wrap"><table><thead><tr><th>范围</th><th>类型</th><th>内容</th><th>owner</th><th>重要度</th><th>使用</th><th>状态</th><th>操作</th></tr></thead><tbody>
           ${data.items.map((item) => `<tr data-content="${esc(item.content)}">
             <td><span class="pill teal">${MEMORY_SCOPE_LABELS[item.scope] || item.scope}</span></td>
@@ -995,15 +1027,32 @@ async function renderMemory(view) {
     }
     const filter = $('#mem-filter');
     if (filter) {
-      filter.addEventListener('input', () => {
-        const keyword = filter.value.trim();
-        $$('#view tbody tr').forEach((row) => {
-          row.style.display = !keyword || (row.dataset.content || '').includes(keyword) ? '' : 'none';
-        });
+      filter.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') searchMemory();
       });
     }
   } catch (error) {
     view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function searchMemory() {
+  const query = ($('#mem-filter')?.value || '').trim();
+  const mode = $('#mem-mode')?.value || 'vector';
+  const box = $('#mem-search-result');
+  if (!query) { if (box) box.innerHTML = ''; return; }
+  try {
+    const data = await api(`/api/memories/search?q=${encodeURIComponent(query)}&mode=${mode}`);
+    if (!box) return;
+    box.innerHTML = data.items.length
+      ? `<div class="alert teal small">${mode === 'vector' ? '64 维 bigram 向量余弦 + 关键词加权' : '关键词 bigram'} · 命中 ${data.total} 条</div>
+        ${data.items.map((item) => `<div class="list-item"><div class="list-main">
+          <div class="list-title">${esc(item.content)}</div>
+          <div class="list-sub">${MEMORY_SCOPE_LABELS[item.scope] || item.scope} · ${MEMORY_TYPE_LABELS[item.type] || item.type} · owner ${esc(item.owner)} · 相关度 ${item.score}</div>
+        </div><div class="list-actions"><span class="pill teal">${item.score}</span></div></div>`).join('')}`
+      : `<div class="alert amber">未命中记忆（向量/关键词均低于阈值）。</div>`;
+  } catch (error) {
+    if (box) box.innerHTML = `<div class="alert red">${esc(error.message)}</div>`;
   }
 }
 
@@ -1141,9 +1190,9 @@ async function showEvalRun(id) {
 async function renderOps(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const [metrics, badcases, events, handoffs] = await Promise.all([
+    const [metrics, badcases, events, handoffs, runs] = await Promise.all([
       api('/api/ops/metrics'), api('/api/badcases'), api('/api/safety/events').catch(() => ({ items: [] })),
-      api('/api/handoffs').catch(() => ({ items: [] })),
+      api('/api/handoffs').catch(() => ({ items: [] })), api('/api/runs?limit=20').catch(() => ({ items: [] })),
     ]);
     const m = metrics.values;
     const canManage = has('badcase:manage');
@@ -1185,6 +1234,16 @@ async function renderOps(view) {
             <div class="list-title">任务 #${h.task_id || '—'} · ${esc(h.patient_ref)}</div>
             <div class="list-sub">${esc(h.reason)} · ${esc(h.created_at)}</div></div><div class="list-actions">${statusPill(h.status)}</div></div>`).join('') : '<div class="muted small">暂无（可在患者端演示中提交危险信号触发）</div>'}
         </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">试跑运行记录（旧版运行记录能力吸收）</h3>
+        <div class="table-wrap"><table><thead><tr><th>ID</th><th>应用</th><th>用户</th><th>输入</th><th>降级</th><th>记忆写入</th><th>时间</th></tr></thead><tbody>
+          ${runs.items.length ? runs.items.map((run) => `<tr><td>#${run.id}</td><td>${esc(run.app_name || run.app_id)}</td>
+            <td class="mono small">${esc(run.user_id)}</td><td class="small">${esc(String(run.input || '').slice(0, 40))}</td>
+            <td>${run.degraded ? '<span class="pill amber">降级</span>' : '<span class="pill green">正常</span>'}</td>
+            <td>${run.memory_written ? '<span class="pill teal">已写入</span>' : '—'}</td>
+            <td class="small muted">${esc(run.created_at)}</td></tr>`).join('') : '<tr><td colspan="7" class="muted">暂无运行记录</td></tr>'}
+        </tbody></table></div>
       </div>
       <div class="card">
         <h3 class="section-title">审计日志</h3>
@@ -1333,6 +1392,7 @@ async function submitFollowup() {
 window.MA = {
   createApp, submitApp, decide, rollback, disableApp, trial,
   toggleCreate, pgReset,
+  pgCloseSession, searchMemory,
   memoryToggle, memoryDelete,
   searchKnowledge, reviewDoc, testPolicy, runEval, showEvalRun,
   assignBadcase, closeBadcase, loadAudit, exportAudit,

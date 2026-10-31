@@ -33,7 +33,7 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 测试：
 
 ```powershell
-python tests/test_api.py     # 20 项接口验收测试
+python tests/test_api.py     # 21 项接口验收测试
 ```
 
 或 `scripts/check.ps1`（测试 + 前端 JS 语法检查）。
@@ -48,7 +48,8 @@ python tests/test_api.py     # 20 项接口验收测试
 | 机构/角色 | 用户-角色-科室；页面/API/数据查询权限校验 | FR-002 |
 | 应用工厂 | 2 个模板、创建/配置、试跑（输出+引用+免责+版本+降级） | FR-003 |
 | 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→记忆→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
-| 记忆（扩展） | 三级范围（用户/应用/租户）× 四类（偏好/事实/摘要/指令）、去重/软删/硬删、试跑注入（memory 轨迹 + use_count） | AgentHub v1.2 能力重建（非 v1.1 必需） |
+| 记忆（扩展） | 三级范围 × 四类、去重/软删/硬删、**session 会话结束写摘要 / auto 运行后自动写入**、**64 维 bigram 向量检索**、试跑注入轨迹 | AgentHub v1.2 能力重建（非 v1.1 必需） |
+| 运行记录（扩展） | 每次试跑落 runs（应用/用户/输入/降级/记忆写入），运营台可查 | 旧版运行记录能力吸收 |
 | 评测门禁 | 评测集、指标（召回/引用/答案正确/编造/检出）、阈值、未达标阻断发布 | FR-004 |
 | 审批发布 | 科室→平台两级审批；发布版本快照；停用/回滚；发布人/审批人/版本可追溯 | FR-005 |
 | 模型网关 | 模型注册、策略链、超时/降级显式标记、密钥/调用记录；小程序不直连模型 | FR-006 |
@@ -92,7 +93,7 @@ server/app.py（零依赖 HTTP，静态托管 + API 路由 + Token 中间件）
   ├─ wechat.py      微信登录（真实/ dev mock）
   └─ seed.py        合成种子数据（用户/知识/应用/评测/患者）
 web/                 index.html + app.css + app.js（无构建）
-tests/test_api.py    20 项验收测试（真实进程 + HTTP）
+tests/test_api.py    21 项验收测试（真实进程 + HTTP）
 docs/                需求映射、接口契约
 screenshots/         真实运行截图
 ```
@@ -138,8 +139,11 @@ screenshots/         真实运行截图
 | GET | `/api/templates` | 模板列表 |
 | GET/POST | `/api/apps` | 应用列表/创建 |
 | PUT | `/api/apps/{id}` | 修改草稿配置 |
-| POST | `/api/apps/{id}/trial` | 试跑（返回输出/引用/版本/轨迹） |
+| POST | `/api/apps/{id}/trial` | 试跑（输出/引用/版本/轨迹/自动记忆） |
 | POST | `/api/apps/{id}/feedback` | 试跑反馈（无用→BadCase） |
+| POST | `/api/apps/{id}/sessions` | 创建调试会话 |
+| POST | `/api/sessions/{id}/close` | 结束会话（session 模式写摘要） |
+| GET | `/api/runs` | 试跑运行记录 |
 | GET | `/api/apps/{id}/release-check` | 发布前逐项检查 |
 | POST | `/api/apps/{id}/submit` | 提交发布（进入科室审批） |
 | POST | `/api/apps/{id}/rollback` | 回滚 |
@@ -148,6 +152,7 @@ screenshots/         真实运行截图
 | POST | `/api/approvals/{id}/decide` | 通过/拒绝（科室→平台） |
 | GET/POST | `/api/knowledge` | 知识列表/导入 |
 | GET/POST | `/api/memories` | 记忆列表/新建（user/agent/tenant × 四类） |
+| GET | `/api/memories/search?q=&mode=vector\|bigram` | 64 维向量/关键词检索 |
 | PUT/DELETE | `/api/memories/{id}` | 更新/软删（`?hard=1` 管理员硬删） |
 | POST | `/api/knowledge/{id}/review` | 审核 |
 | GET | `/api/knowledge/search?q=` | 检索（仅生效+审核+范围） |
@@ -224,6 +229,7 @@ screenshots/         真实运行截图
 ## 10. 文档
 
 - [`docs/requirements-mapping.md`](docs/requirements-mapping.md)：v1.1 FR/NFR/TBD 与实现映射（含未实现项）
+- [`docs/prd-execution-status.md`](docs/prd-execution-status.md)：PRD v2.0 模块执行状态、旧版能力吸收清单、下一步
 - [`docs/api-contract.md`](docs/api-contract.md)：接口、错误码、认证与安全约定
 - 上游依据：`E:\Downloads\医疗AI中台-落地执行包-v1.1.md`（第五部分）
 - 配套 PRD/架构：`../medical-ai-platform/prd/PRD-医疗AI中台-工业落地版-v2.0.docx`

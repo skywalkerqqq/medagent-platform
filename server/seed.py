@@ -162,9 +162,11 @@ def seed(conn) -> bool:
     ds_qc = _insert_eval_dataset(conn, "ds-qc", "病历质控金标准集 v1", "med-qc", qc_cases)
     # 应用
     knowledge_config = dict(templates_mod.TEMPLATES["med-knowledge"]["config"])
-    knowledge_config.update({"prompt_version": 1, "template_version": 1, "memory_enabled": True})
+    knowledge_config.update({"prompt_version": 1, "template_version": 1, "memory_enabled": True,
+                             "memory_write_mode": "auto", "memory_search_mode": "vector"})
     qc_config = dict(templates_mod.TEMPLATES["med-qc"]["config"])
-    qc_config.update({"prompt_version": 1, "template_version": 1, "memory_enabled": False})
+    qc_config.update({"prompt_version": 1, "template_version": 1, "memory_enabled": False,
+                      "memory_write_mode": "off", "memory_search_mode": "vector"})
     app_knowledge = conn.execute(
         """INSERT INTO apps(code, name, template_key, template_version, owner_id, department, status,
                risk_level, config, current_version, created_at, updated_at)
@@ -256,10 +258,11 @@ def seed(conn) -> bool:
     for scope, owner, type_, content, importance in seed_memories:
         conn.execute(
             """INSERT INTO memories(scope, owner, type, content, importance, source, status, use_count,
-                   content_hash, created_at, updated_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+                   content_hash, embedding, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (scope, owner, type_, content, importance, "seed", "active", 0,
-             memory_module.content_hash(scope, owner, type_, content), db.iso(), db.iso()),
+             memory_module.content_hash(scope, owner, type_, content),
+             memory_module.embedding_json(content), db.iso(), db.iso()),
         )
     # 患者端
     conn.executemany(
