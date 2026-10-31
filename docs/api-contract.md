@@ -77,6 +77,7 @@
 |---|---|---|---|
 | GET | /api/ops/metrics | metrics:read | 指标定义+当前值 |
 | GET | /api/ops/alerts | metrics:read | 运营告警（风险/积压/失败/降级） |
+| GET | /api/ops/costs?days=30 | metrics:read | 成本对账：总成本/tokens、按应用、按模型 |
 | GET | /api/dashboard | metrics:read | 指标+检查清单+最近应用/审计 |
 | GET | /api/badcases | metrics:read | 列表 |
 | POST | /api/badcases | badcase:manage | 登记 |

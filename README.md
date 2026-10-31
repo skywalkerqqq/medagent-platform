@@ -51,6 +51,7 @@ python tests/test_dify.py      # 4 项 Dify 适配测试（fake Dify）
 | 应用工厂 | 3 个模板（知识问答/病历质控/报告初稿）、创建/配置、试跑（输出+引用+免责+版本+降级） | FR-003 |
 | 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→记忆→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
 | 报告编辑（扩展） | 报告草稿生成（JSON）→ 医生编辑 → 签名 → 修改率/审计；支持缺失字段提示 | PRD v2.0 临床工作台 FR-40 |
+| 成本对账（扩展） | 近 30 天按应用/模型汇总 tokens 与成本，标注 POC 估算口径 | PRD v2.0 运营 FR-55 |
 | 数据集成（扩展） | HIS/EMR/PACS **mock**：患者上下文聚合、签名报告回写 HIS（幂等/外部 ID/审计）、集成调用记录 | PRD v2.0 §10；真实接口待院方 |
 | 患者小程序（扩展） | `miniprogram/`：微信登录→绑定→报告→随访→危险信号转人工；4 个页面 | v1.1 FR-012/013 + PRD 渠道 |
 | Dify 长尾适配（扩展） | Dify 应用登记/chat/workflow blocking 调用；未配置拒绝、上游失败不伪造、调用记录；不修改 Dify 源码 | PRD v2.0 应用工厂模式 B |
@@ -173,6 +174,7 @@ screenshots/         真实运行截图
 | POST | `/api/model-policies/{key}/test` | 网关测试（含降级） |
 | GET/POST | `/api/eval/datasets` / `/api/eval/run` | 评测集/执行评测 |
 | GET | `/api/ops/metrics` | 指标口径与当前值 |
+| GET | `/api/ops/costs?days=30` | 成本对账（按应用/模型） |
 | GET/POST | `/api/badcases`、`/api/badcases/{id}` | BadCase |
 | GET | `/api/audit`、`/api/audit/export` | 审计/导出 |
 | GET | `/api/patient/me`、`/api/patient/reports`、`/api/patient/followups` | 患者端 |

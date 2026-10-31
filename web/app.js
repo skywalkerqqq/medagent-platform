@@ -1561,10 +1561,10 @@ async function showEvalRun(id) {
 async function renderOps(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const [metrics, badcases, events, handoffs, runs, alerts] = await Promise.all([
+    const [metrics, badcases, events, handoffs, runs, alerts, costs] = await Promise.all([
       api('/api/ops/metrics'), api('/api/badcases'), api('/api/safety/events').catch(() => ({ items: [] })),
       api('/api/handoffs').catch(() => ({ items: [] })), api('/api/runs?limit=20').catch(() => ({ items: [] })),
-      api('/api/ops/alerts').catch(() => ({ items: [] })),
+      api('/api/ops/alerts').catch(() => ({ items: [] })), api('/api/ops/costs').catch(() => null),
     ]);
     const m = metrics.values;
     const canManage = has('badcase:manage');
@@ -1614,6 +1614,19 @@ async function renderOps(view) {
             <div class="list-title">任务 #${h.task_id || '—'} · ${esc(h.patient_ref)}</div>
             <div class="list-sub">${esc(h.reason)} · ${esc(h.created_at)}</div></div><div class="list-actions">${statusPill(h.status)}</div></div>`).join('') : '<div class="muted small">暂无（可在患者端演示中提交危险信号触发）</div>'}
         </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">成本对账（近 30 天）</h3>
+        ${costs ? `<div class="grid grid-3">
+          ${kpi('总成本', `¥${(costs.total.cost || 0).toFixed(4)}`, `${costs.total.runs} 次运行`, 'teal')}
+          ${kpi('总 tokens', costs.total.tokens, `${costs.total.model_calls} 次模型调用`, 'green')}
+          ${kpi('模型成本', `¥${(costs.total.model_cost || 0).toFixed(4)}`, '模型调用记录估算', 'amber')}
+        </div>
+        <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>应用</th><th>运行</th><th>tokens</th><th>成本</th></tr></thead><tbody>
+          ${costs.by_app.map((item) => `<tr><td>${esc(item.app_name || `#${item.app_id}`)}</td><td>${item.runs}</td>
+            <td>${item.tokens}</td><td>¥${(item.cost || 0).toFixed(4)}</td></tr>`).join('') || '<tr><td colspan="4" class="muted">暂无运行成本</td></tr>'}
+        </tbody></table></div>
+        <div class="small muted" style="margin-top:8px">${esc(costs.note)}</div>` : '<div class="muted small">暂无成本数据</div>'}
       </div>
       <div class="card">
         <h3 class="section-title">试跑运行记录（旧版运行记录能力吸收）</h3>

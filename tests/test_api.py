@@ -361,6 +361,11 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIsInstance(alerts["items"], list)
         self.assertTrue(any(item["severity"] in ("high", "medium", "low") for item in alerts["items"]))
+        status, costs = request("GET", "/api/ops/costs?days=30", token=admin)
+        self.assertEqual(status, 200)
+        self.assertIn("total", costs)
+        self.assertIn("by_app", costs)
+        self.assertIsInstance(costs["total"]["cost"], (int, float))
 
     def test_14_knowledge_permissions(self):
         creator = self.token("u_creator")

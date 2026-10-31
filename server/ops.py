@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+from datetime import timedelta
 
 import common
 import db
@@ -118,6 +119,42 @@ def alerts(ctx):
     return 200, {"items": items, "generated_at": db.iso()}
 
 
+def costs(ctx):
+    common.require(ctx["user"], "metrics:read")
+    days = common.int_field(ctx["query"].get("days"), "days", default=30, minimum=1, maximum=365)
+    since = db.iso(db.now() - timedelta(days=days))
+    conn = ctx["conn"]
+    run_rows = conn.execute(
+        """SELECT r.app_id, a.name AS app_name, COUNT(*) AS runs,
+                  COALESCE(SUM(r.tokens),0) AS tokens,
+                  COALESCE(SUM(r.cost),0) AS cost
+           FROM runs r LEFT JOIN apps a ON a.id=r.app_id
+           WHERE r.created_at >= ? GROUP BY r.app_id, a.name ORDER BY cost DESC""",
+        (since,),
+    ).fetchall()
+    model_rows = conn.execute(
+        """SELECT model_key, COUNT(*) AS calls, COALESCE(SUM(tokens),0) AS tokens,
+                  COALESCE(SUM(cost),0) AS cost
+           FROM model_calls WHERE created_at >= ? GROUP BY model_key ORDER BY cost DESC""",
+        (since,),
+    ).fetchall()
+    app_cost = [{**dict(row), "cost": round(row["cost"], 6)} for row in run_rows]
+    model_cost = [{**dict(row), "cost": round(row["cost"], 6)} for row in model_rows]
+    total_cost = round(sum(item["cost"] for item in app_cost), 6)
+    total_tokens = sum(item["tokens"] for item in app_cost)
+    return 200, {
+        "days": days,
+        "since": since,
+        "total": {"cost": total_cost, "tokens": total_tokens,
+                  "runs": sum(item["runs"] for item in app_cost),
+                  "model_calls": sum(item["calls"] for item in model_cost),
+                  "model_cost": round(sum(item["cost"] for item in model_cost), 6)},
+        "by_app": app_cost,
+        "by_model": model_cost,
+        "note": "成本为 POC 估算（tokens × 单价），真实账单需院方/模型供应商对账口径",
+    }
+
+
 def list_badcases(ctx):
     common.require(ctx["user"], "metrics:read")
     query = ctx["query"]
@@ -202,6 +239,7 @@ def list_handoffs(ctx):
 ROUTES = [
     ("GET", re.compile(r"^/api/ops/metrics$"), metrics),
     ("GET", re.compile(r"^/api/ops/alerts$"), alerts),
+    ("GET", re.compile(r"^/api/ops/costs$"), costs),
     ("GET", re.compile(r"^/api/dashboard$"), dashboard),
     ("GET", re.compile(r"^/api/badcases$"), list_badcases),
     ("POST", re.compile(r"^/api/badcases$"), create_badcase),
