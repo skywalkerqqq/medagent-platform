@@ -15,7 +15,7 @@
 | 审计哈希链 | ✅ | `/api/audit/verify`；WORM/异地仍待等保阶段 |
 | 备份脚本 | ✅ | `deploy/backup.ps1`、`deploy/backup.sh`（SQLite online backup + SHA256） |
 | TLS 反代模板 | 🟡 | `deploy/nginx`，需院方证书；未启用 HTTP/2 优化与 WAF |
-| PostgreSQL | ⬜ | 仅 compose profile 占位；**当前应用未接线 PG**，下一阶段迁移 |
+| PostgreSQL | 🟡 | 迁移工具 `production/migrate_to_pg.py`（导出/DDL/导入/对账）已就绪；**运行时未接线 PG** |
 | SSO / 等保 / WAF / 限流 | ⬜ | 未实现 |
 | HA / 多副本 / 压测 | ⬜ | SQLite 单写限制，需先迁移 PG |
 
@@ -105,7 +105,7 @@ docker compose -f deploy/docker-compose.yml exec app python -c "import sqlite3; 
 
 ## 八、下一阶段（按顺序）
 
-1. **PostgreSQL 迁移**：见 `deploy/postgres/README.md`；完成后可多副本 + 连接池；
+1. **PostgreSQL 迁移**：迁移工具已就绪（见 `deploy/postgres/README.md`），下一步 repository 抽象与运行时切换；完成后可多副本 + 连接池；
 2. **SSO/OIDC + 会话存储**（Redis），替代当前内存 Token；
 3. **可观测性**：结构化日志、指标（Prometheus）、Trace、告警；
 4. **安全**：限流、WAF、密钥管理、审计 WORM、等保测评；
