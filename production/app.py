@@ -29,6 +29,7 @@ import auth  # noqa: E402
 import common  # noqa: E402
 import db  # noqa: E402
 import handlers  # noqa: E402
+import ratelimit  # noqa: E402
 import seed  # noqa: E402
 
 DB_PATH = Path(os.environ.get("MEDAGENT_DB", str(ROOT / "data" / "medagent.db"))).resolve()
@@ -36,6 +37,7 @@ WEB_DIR = Path(os.environ.get("MEDAGENT_WEB", str(ROOT / "web"))).resolve()
 PUBLIC = set(auth.PUBLIC_PATHS) | {"/api/health"}
 MAX_BODY = 1024 * 1024
 VERSION = "1.1.0-prod-stage1"
+LIMITER = ratelimit.Limiter.from_env()
 
 
 @asynccontextmanager
@@ -56,6 +58,16 @@ app = FastAPI(title="MediAgent 医疗 AI 中台（生产边缘 Stage 1）",
 async def security_headers(request: Request, call_next):
     request_id = request.headers.get("X-Request-Id") or uuid.uuid4().hex[:16]
     started = time.time()
+    if LIMITER.enabled and request.url.path.rstrip("/") != "/api/health":
+        client = request.client.host if request.client else "unknown"
+        key = LIMITER.client_key(client, {key.lower(): value for key, value in request.headers.items()})
+        allowed, retry_after = LIMITER.allow(key)
+        if not allowed:
+            response = JSONResponse(status_code=429,
+                                    content={"error": {"code": "rate_limited", "message": "请求过于频繁，请稍后重试"}})
+            response.headers["Retry-After"] = str(retry_after)
+            response.headers["X-Request-Id"] = request_id
+            return response
     response = await call_next(request)
     response.headers["X-Request-Id"] = request_id
     response.headers["X-Content-Type-Options"] = "nosniff"

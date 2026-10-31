@@ -8,6 +8,10 @@ services:
     image: medagent-platform:stage1
     environment:
       MEDAGENT_DB: /app/data/medagent.db
+      RATE_LIMIT_RPS: "20"
+      RATE_LIMIT_BURST: "40"
+      # 仅当 app 只在反代后方可达时设置 TRUST_PROXY=1（否则 X-Forwarded-For 可被伪造）
+      # TRUST_PROXY: "1"
       # 生产必须由编排平台/密钥管理注入，不要写入镜像
       # LLM_MODE: live
       # LLM_BASE_URL: https://llm.example.com/v1

@@ -55,6 +55,7 @@ python tests/test_production_import.py  # 生产边缘导入（无 FastAPI 时�
 | 报告编辑（扩展） | 报告草稿生成（JSON）→ 医生编辑 → 签名 → 修改率/审计；支持缺失字段提示 | PRD v2.0 临床工作台 FR-40 |
 | 成本对账（扩展） | 近 30 天按应用/模型汇总 tokens 与成本，标注 POC 估算口径 | PRD v2.0 运营 FR-55 |
 | 知识来源同步（扩展） | 文件/JSON/URL 来源登记→同步为 pending 知识→审核生效；路径限制 data/ 内；相同标题+来源跳过 | PRD v2.0 知识中枢 |
+| 安全加固（扩展） | 令牌桶限流（429 + Retry-After，`RATE_LIMIT_RPS/BURST`）、安全响应头、HSTS 可选；[压测基线](docs/load-test-baseline.md) | 工业门槛 |
 | PG 迁移骨架（扩展） | `production/migrate_to_pg.py`：SQLite 全表导出 + PG DDL 生成 + 可选导入/行校验和对账；**运行时仍 SQLite** | 生产化下一阶段 |
 | 审计哈希链（扩展） | 每条审计 SHA-256 链式哈希（prev_hash），`/api/audit/verify` 检测篡改/断链；升级前历史行标 legacy | 等保/审计 |
 | 生产化 Stage 1（扩展） | FastAPI 边缘 + Dockerfile/Compose + `/healthz` `/readyz` + 安全响应头 + 备份脚本 + TLS 反代模板；**存储仍 SQLite**，PG 下一阶段 | 工业落地 |
@@ -262,6 +263,7 @@ screenshots/         真实运行截图
 - [`docs/requirements-mapping.md`](docs/requirements-mapping.md)：v1.1 FR/NFR/TBD 与实现映射（含未实现项）
 - [`docs/prd-execution-status.md`](docs/prd-execution-status.md)：PRD v2.0 模块执行状态、旧版能力吸收清单、下一步
 - [`docs/production-deployment.md`](docs/production-deployment.md)：生产化 Stage 1 部署、备份、TLS、边界与下一阶段
+- [`docs/load-test-baseline.md`](docs/load-test-baseline.md)：本机压测基线与局限
 - [`docs/api-contract.md`](docs/api-contract.md)：接口、错误码、认证与安全约定
 - 上游依据：`E:\Downloads\医疗AI中台-落地执行包-v1.1.md`（第五部分）
 - 配套 PRD/架构：`../medical-ai-platform/prd/PRD-医疗AI中台-工业落地版-v2.0.docx`

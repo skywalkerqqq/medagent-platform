@@ -133,6 +133,13 @@
 | POST | /api/integrations/dify/apps | model:read | `{name, app_type: chat|workflow, base_url?, app_id?, api_key_env?}` |
 | POST | /api/integrations/dify/apps/{id}/run | app:trial | `{query}` → blocking 调用；未配置 400 dify_not_configured；上游失败 502 dify_upstream |
 
+## 7.10 限流与安全响应头
+
+- 默认关闭；开启后按客户端 IP 令牌桶限流，超限返回 `429 rate_limited` + `Retry-After`；
+- `/api/health` 不参与限流；
+- 所有 API/静态响应带 `X-Content-Type-Options: nosniff`、`X-Frame-Options: DENY`、`Referrer-Policy: no-referrer`；HTTPS 下可开 HSTS；
+- 仅 `TRUST_PROXY=1` 时信任 `X-Forwarded-For`。
+
 ## 8. 错误码
 
 | code | HTTP | 含义 |

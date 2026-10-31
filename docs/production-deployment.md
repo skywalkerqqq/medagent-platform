@@ -12,6 +12,8 @@
 | Docker Compose | ✅ | `deploy/docker-compose.yml`：app + 可选 TLS 代理 |
 | 健康检查 | ✅ | `/healthz` 存活、`/readyz` 数据库就绪 |
 | 安全响应头 | ✅ | nosniff / DENY / no-referrer / X-Request-Id / X-Process-Time |
+| 限流 | ✅ | 令牌桶：`RATE_LIMIT_RPS/BURST`，429 + Retry-After；默认关闭，Compose 开 20rps |
+| 压测基线 | 🟡 | 本机只读接口基线（QPS/P50/P95/P99），非生产容量承诺 |
 | 审计哈希链 | ✅ | `/api/audit/verify`；WORM/异地仍待等保阶段 |
 | 备份脚本 | ✅ | `deploy/backup.ps1`、`deploy/backup.sh`（SQLite online backup + SHA256） |
 | TLS 反代模板 | 🟡 | `deploy/nginx`，需院方证书；未启用 HTTP/2 优化与 WAF |
@@ -59,6 +61,9 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 | 变量 | 必填 | 说明 |
 |---|---|---|
 | `MEDAGENT_DB` | 否 | SQLite 路径，默认 `/app/data/medagent.db` |
+| `RATE_LIMIT_RPS` / `RATE_LIMIT_BURST` | 否 | 令牌桶限流；0=关闭；Compose 默认 20/40 |
+| `TRUST_PROXY` | 否 | 1=信任 X-Forwarded-For（仅 app 在可信反代后方时） |
+| `ENABLE_HSTS` | 否 | 1=输出 HSTS 头（仅 HTTPS 入口） |
 | `MEDAGENT_WEB` | 否 | 前端目录，默认 `/app/web` |
 | `LLM_MODE=live` + `LLM_BASE_URL/LLM_API_KEY/LLM_MODEL` | 否 | 真实 OpenAI 兼容模型上游 |
 | `DIFY_BASE_URL` / `DIFY_API_KEY` | 否 | Dify 长尾应用运行 |

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 import traceback
 import urllib.parse
@@ -21,12 +22,14 @@ import auth  # noqa: E402
 import common  # noqa: E402
 import db  # noqa: E402
 import handlers  # noqa: E402
+import ratelimit  # noqa: E402
 import seed  # noqa: E402
 
 WEB_DIR = ROOT / "web"
 DB_PATH = ROOT / "data" / "medagent.db"
 PUBLIC = set(auth.PUBLIC_PATHS) | {"/api/health"}
 MAX_BODY = 1024 * 1024
+LIMITER = ratelimit.Limiter.from_env()
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -55,6 +58,14 @@ class Handler(BaseHTTPRequestHandler):
         if not path.startswith("/api/"):
             self._static(path)
             return
+        headers_lower = {key.lower(): value for key, value in self.headers.items()}
+        if path.rstrip("/") != "/api/health" and LIMITER.enabled:
+            key = LIMITER.client_key(self.client_address[0], headers_lower)
+            allowed, retry_after = LIMITER.allow(key)
+            if not allowed:
+                self._json(429, {"error": {"code": "rate_limited", "message": "请求过于频繁，请稍后重试"}},
+                           {"Retry-After": str(retry_after)})
+                return
         query = dict(urllib.parse.parse_qsl(parsed.query, keep_blank_values=False))
         body = {}
         length = int(self.headers.get("Content-Length") or 0)
@@ -72,7 +83,6 @@ class Handler(BaseHTTPRequestHandler):
                 self._json(400, {"error": {"code": "invalid_json", "message": "请求体必须是 JSON 对象"}})
                 return
         conn = db.connect(DB_PATH)
-        headers_lower = {key.lower(): value for key, value in self.headers.items()}
         try:
             user = None
             if path.rstrip("/") not in PUBLIC:
@@ -102,12 +112,19 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             conn.close()
 
-    def _json(self, status: int, payload):
+    def _json(self, status: int, payload, extra_headers: dict | None = None):
         raw = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
+        if (os.environ.get("ENABLE_HSTS") or "") in ("1", "true", "yes"):
+            self.send_header("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+        for key, value in (extra_headers or {}).items():
+            self.send_header(key, value)
         self.end_headers()
         self.wfile.write(raw)
 
@@ -141,6 +158,9 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(content)))
         self.send_header("Cache-Control", "no-cache")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Referrer-Policy", "no-referrer")
         self.end_headers()
         self.wfile.write(content)
 
