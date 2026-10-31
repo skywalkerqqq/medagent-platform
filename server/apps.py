@@ -135,7 +135,7 @@ def update_app(ctx):
     if app["status"] not in ("draft", "testing"):
         raise common.ApiError(409, "conflict", "仅草稿/测试状态可编辑，已提交发布的应用不可改")
     config = _config(app)
-    for key in ("model_policy", "knowledge_scope", "channels", "temperature"):
+    for key in ("model_policy", "knowledge_scope", "channels", "temperature", "memory_enabled"):
         if key in body:
             config[key] = body[key]
     if config.get("model_policy") and not conn.execute(
@@ -159,7 +159,7 @@ def trial(ctx):
     query = common.str_field(body.get("query") or body.get("content"), "query", required=True)
     if len(query) > 4000:
         raise common.ApiError(400, "validation", "输入过长（≤4000 字）")
-    result = engine.generate(conn, app, query, user["department"] or "")
+    result = engine.generate(conn, app, query, user["department"] or "", user_id=user["id"])
     if app["status"] == "draft":
         conn.execute("UPDATE apps SET status='testing', updated_at=? WHERE id=?", (db.iso(), app["id"]))
     common.audit(conn, user["id"], "试跑应用", "app", app["id"], f"{len(query)} 字，降级={result['degraded']}")

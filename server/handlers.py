@@ -9,6 +9,7 @@ import common
 import db
 import eval_center
 import knowledge
+import memory
 import models
 import ops
 import patient
@@ -34,7 +35,7 @@ ROUTES = [
     ("GET", re.compile(r"^/api/health$"), health),
     ("GET", re.compile(r"^/api/users$"), users),
 ] + auth.ROUTES + templates.ROUTES + knowledge.ROUTES + models.ROUTES + eval_center.ROUTES + \
-    apps.ROUTES + ops.ROUTES + patient.ROUTES + safety.ROUTES + wechat.ROUTES
+    apps.ROUTES + ops.ROUTES + patient.ROUTES + safety.ROUTES + wechat.ROUTES + memory.ROUTES
 
 
 def dispatch(method: str, path: str, ctx: dict):

@@ -17,6 +17,7 @@ const NAV = [
   ] },
   { group: '能力', items: [
     { key: 'knowledge', label: '知识中心', icon: 'book', path: '/knowledge' },
+    { key: 'memory', label: '记忆', icon: 'brain', path: '/memory' },
     { key: 'models', label: '模型网关', icon: 'cpu', path: '/models' },
     { key: 'eval', label: '评测门禁', icon: 'target', path: '/eval' },
   ] },
@@ -40,6 +41,7 @@ const ICON_PATHS = {
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
   arrow: '<path d="M5 12h14"/><path d="m13 6 6 6-6 6"/>',
   refresh: '<path d="M20 11A8 8 0 1 0 18.4 16"/><path d="M20 4v7h-7"/>',
+  brain: '<path d="M9.5 3a3 3 0 0 0-3 3v1.2A3 3 0 0 0 4 10v1a3 3 0 0 0 1.5 2.6V15a3 3 0 0 0 4.5 2.6V3z"/><path d="M14.5 3a3 3 0 0 1 3 3v1.2A3 3 0 0 1 20 10v1a3 3 0 0 1-1.5 2.6V15a3 3 0 0 1-4.5 2.6V3z"/>',
 };
 
 function icon(name, size = 18) {
@@ -53,6 +55,7 @@ const TITLES = {
   '/apps': ['应用工厂', '工作台 / 应用工厂'],
   '/playground': ['运行调试', '工作台 / 运行调试'],
   '/knowledge': ['知识中心', '能力 / 知识中心'],
+  '/memory': ['记忆', '能力 / 长期记忆'],
   '/models': ['模型网关', '能力 / 模型网关'],
   '/eval': ['评测门禁', '能力 / 评测门禁'],
   '/ops': ['运营 / BadCase', '治理 / 运营'],
@@ -191,6 +194,7 @@ function route() {
     '/apps': renderApps,
     '/playground': renderPlayground,
     '/knowledge': renderKnowledge,
+    '/memory': renderMemory,
     '/models': renderModels,
     '/eval': renderEval,
     '/ops': renderOps,
@@ -696,6 +700,7 @@ async function renderAppDetail(view, id) {
           <div class="small"><b>知识范围：</b>${(app.config.knowledge_scope || []).join('、')}</div>
           <div class="small"><b>渠道：</b>${(app.config.channels || []).join('、')}</div>
           <div class="small"><b>风险等级：</b>${esc(app.risk_level)}</div>
+          <div class="small"><b>长期记忆：</b>${app.config.memory_enabled ? '<span class="pill green">已开启</span>（试跑注入 user/agent/tenant 相关记忆）' : '<span class="pill gray">未开启</span>'}</div>
           <div class="small"><b>模板/提示词版本：</b>v${app.template_version}</div>
           <div class="small muted" style="margin-top:10px">发布版本会固定模板/提示词/模型/知识/评测集/审批记录（FR-005、6.4）。</div>
           <h3 class="section-title" style="margin-top:18px">版本历史</h3>
@@ -894,6 +899,127 @@ async function reviewDoc(id, decision) {
   try {
     await api(`/api/knowledge/${id}/review`, { method: 'POST', body: { decision, comment } });
     toast(decision === 'approve' ? '已审核通过' : '已拒绝');
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+/* ---------------------------------------------------------------- 记忆 */
+const MEMORY_SCOPE_LABELS = { user: '用户', agent: '应用', tenant: '租户' };
+const MEMORY_TYPE_LABELS = { preference: '偏好', fact: '事实', summary: '摘要', instruction: '指令' };
+
+async function renderMemory(view) {
+  view.innerHTML = '<div class="card">加载中…</div>';
+  try {
+    const data = await api('/api/memories?limit=100');
+    const canWrite = has('memory:write');
+    const canHard = has('admin');
+    view.innerHTML = `
+      <div class="grid grid-4">
+        ${kpi('记忆总数', data.stats.total, '含已删除', 'teal')}
+        ${kpi('活跃记忆', data.stats.active, '参与试跑注入', 'green')}
+        ${kpi('累计使用', data.stats.total_use, '被注入次数', 'amber')}
+        ${kpi('类别', Object.keys(data.stats.by_type).length, Object.keys(data.stats.by_type).map((k) => MEMORY_TYPE_LABELS[k] || k).join(' / '), 'violet')}
+      </div>
+      <div class="grid grid-2" style="margin-top:20px">
+        ${canWrite ? `<div class="card">
+          <h3 class="section-title">新建记忆</h3>
+          <p class="section-sub">范围：用户（本账号）/ 应用（指定应用 ID）/ 租户（default）；相同 scope+owner+type+content 自动去重。</p>
+          <form id="memory-form">
+            <div class="form-row">
+              <label class="field"><span>范围</span><select id="mem-scope">
+                <option value="user">用户（user）</option>
+                <option value="agent">应用（agent）</option>
+                <option value="tenant">租户（tenant）</option>
+              </select></label>
+              <label class="field"><span>owner（user/agent 时填写）</span><input id="mem-owner" placeholder="应用 ID；用户默认本人" /></label>
+            </div>
+            <div class="form-row">
+              <label class="field"><span>类型</span><select id="mem-type">
+                ${Object.entries(MEMORY_TYPE_LABELS).map(([k, label]) => `<option value="${k}">${label}</option>`).join('')}
+              </select></label>
+              <label class="field"><span>重要度（1–3）</span><input id="mem-importance" type="number" min="1" max="3" value="2" /></label>
+            </div>
+            <label class="field"><span>内容</span><textarea id="mem-content" placeholder="例如：回答时先给结论，再列引用依据。" required></textarea></label>
+            <label class="field"><span>过期时间（可选）</span><input id="mem-expires" placeholder="2027-10-01T00:00:00+08:00" /></label>
+            <button class="btn btn-primary" type="submit">创建记忆</button>
+          </form>
+        </div>` : `<div class="card"><div class="alert amber">当前角色无记忆写入权限（可用 u_doctor / u_creator / u_knowledge 演示）。</div></div>`}
+        <div class="card">
+          <h3 class="section-title">试跑时的注入规则</h3>
+          <div class="small muted" style="line-height:1.9">
+            1. 仅当应用配置 <code>memory_enabled=true</code> 时注入；<br>
+            2. 检索 user=当前用户、agent=当前应用、tenant=default 的活跃且未过期记忆；<br>
+            3. 按查询词相关性 + 重要度排序取 Top3，输出以「结合历史记忆」标注；<br>
+            4. 注入写入执行轨迹（memory 步骤）并累计 use_count；<br>
+            5. 患者端不使用临床记忆；记忆不替代医生判断。
+          </div>
+          <div class="alert teal small">旧 AgentHub v1.2 的记忆能力已在新中台重建：三级范围 × 四类、去重、软删/硬删、注入轨迹。</div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="btn-row" style="justify-content:space-between;margin-bottom:12px">
+          <h3 class="section-title" style="margin:0">记忆清单 <span class="muted small">（${data.total}）</span></h3>
+          <div class="search-box">${icon('search', 15)}<input id="mem-filter" placeholder="筛选记忆内容" /></div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>范围</th><th>类型</th><th>内容</th><th>owner</th><th>重要度</th><th>使用</th><th>状态</th><th>操作</th></tr></thead><tbody>
+          ${data.items.map((item) => `<tr data-content="${esc(item.content)}">
+            <td><span class="pill teal">${MEMORY_SCOPE_LABELS[item.scope] || item.scope}</span></td>
+            <td class="small">${MEMORY_TYPE_LABELS[item.type] || item.type}</td>
+            <td class="small" style="max-width:420px">${esc(item.content)}</td>
+            <td class="mono small">${esc(item.owner)}</td>
+            <td>${'★'.repeat(item.importance || 1)}</td>
+            <td>${item.use_count}</td>
+            <td>${statusPill(item.status === 'active' ? 'active' : 'disabled')}</td>
+            <td>${canWrite ? `<button class="btn btn-outline btn-sm" onclick="MA.memoryToggle(${item.id}, '${item.status === 'active' ? 'deleted' : 'active'}')">${item.status === 'active' ? '停用' : '启用'}</button>
+              <button class="btn btn-danger btn-sm" onclick="MA.memoryDelete(${item.id}, false)">删除</button>
+              ${canHard ? `<button class="btn btn-ghost btn-sm" onclick="MA.memoryDelete(${item.id}, true)">硬删</button>` : ''}` : '—'}</td>
+          </tr>`).join('') || '<tr><td colspan="8" class="muted">暂无记忆</td></tr>'}
+        </tbody></table></div>
+      </div>`;
+    if (canWrite) {
+      $('#memory-form').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          await api('/api/memories', { method: 'POST', body: {
+            scope: $('#mem-scope').value,
+            owner: $('#mem-owner').value.trim(),
+            type: $('#mem-type').value,
+            content: $('#mem-content').value.trim(),
+            importance: Number($('#mem-importance').value || 2),
+            expires_at: $('#mem-expires').value.trim(),
+          } });
+          toast('记忆已创建');
+          route();
+        } catch (error) { toast(error.message, 'error'); }
+      });
+    }
+    const filter = $('#mem-filter');
+    if (filter) {
+      filter.addEventListener('input', () => {
+        const keyword = filter.value.trim();
+        $$('#view tbody tr').forEach((row) => {
+          row.style.display = !keyword || (row.dataset.content || '').includes(keyword) ? '' : 'none';
+        });
+      });
+    }
+  } catch (error) {
+    view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function memoryToggle(id, status) {
+  try {
+    await api(`/api/memories/${id}`, { method: 'PUT', body: { status } });
+    toast(status === 'active' ? '已启用' : '已停用');
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+async function memoryDelete(id, hard) {
+  if (!window.confirm(hard ? '硬删除后不可恢复，确认？' : '确认删除（软删）？')) return;
+  try {
+    await api(`/api/memories/${id}${hard ? '?hard=1' : ''}`, { method: 'DELETE' });
+    toast(hard ? '已硬删除' : '已删除');
     route();
   } catch (error) { toast(error.message, 'error'); }
 }
@@ -1207,6 +1333,7 @@ async function submitFollowup() {
 window.MA = {
   createApp, submitApp, decide, rollback, disableApp, trial,
   toggleCreate, pgReset,
+  memoryToggle, memoryDelete,
   searchKnowledge, reviewDoc, testPolicy, runEval, showEvalRun,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,

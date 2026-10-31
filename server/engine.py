@@ -6,6 +6,7 @@ import re
 
 import common
 import knowledge
+import memory
 import models
 import safety
 import templates as templates_mod
@@ -17,7 +18,7 @@ def _app_config(app) -> dict:
     return common.loads(app["config"], {}) or {}
 
 
-def generate(conn, app, query: str, department: str = "") -> dict:
+def generate(conn, app, query: str, department: str = "", user_id: str | None = None) -> dict:
     template = templates_mod.get_template(app["template_key"])
     if not template:
         raise common.ApiError(400, "template_missing", "应用关联模板不存在")
@@ -27,6 +28,8 @@ def generate(conn, app, query: str, department: str = "") -> dict:
     citations: list[dict] = []
     blocked = False
     handoff = False
+    memory_hits: list[dict] = []
+    memory_step = None
 
     if app["template_key"] == "med-knowledge":
         hits = knowledge.search(conn, query, scope, limit=3)
@@ -56,6 +59,18 @@ def generate(conn, app, query: str, department: str = "") -> dict:
         }, ensure_ascii=False)
     else:
         raise common.ApiError(400, "template_missing", "不支持的模板")
+
+    if config.get("memory_enabled") and user_id:
+        memory_hits = memory.retrieve(conn, app["id"], user_id, query)
+        if memory_hits:
+            memory.mark_used(conn, [item["id"] for item in memory_hits])
+            block = "\n".join(f"- {item['content']}" for item in memory_hits)
+            answer = f"【结合历史记忆】\n{block}\n\n{answer}"
+            memory_step = {"type": "memory", "name": "记忆注入", "status": "succeeded",
+                           "detail": f"注入 {len(memory_hits)} 条相关记忆", "latency_ms": 6}
+        else:
+            memory_step = {"type": "memory", "name": "记忆注入", "status": "empty",
+                           "detail": "无相关记忆", "latency_ms": 4}
 
     gateway = models.call_gateway(conn, app["id"], policy, query)
     if gateway.get("ok"):
@@ -99,6 +114,8 @@ def generate(conn, app, query: str, department: str = "") -> dict:
         {"type": "template", "name": "加载模板", "status": "succeeded",
          "detail": f"{app['template_key']} v{app['template_version']} · 提示词 v{template['version']}", "latency_ms": 4},
     ]
+    if memory_step:
+        trace.append(memory_step)
     if app["template_key"] == "med-knowledge":
         trace.append({
             "type": "rag", "name": "知识检索", "status": "succeeded" if citations else "empty",
@@ -134,4 +151,7 @@ def generate(conn, app, query: str, department: str = "") -> dict:
         "cost": cost,
         "model": gateway,
         "trace": trace,
+        "memory": {"enabled": bool(config.get("memory_enabled")),
+                   "injected": len(memory_hits),
+                   "use_count": sum(item.get("use_count", 0) for item in memory_hits)},
     }

@@ -424,6 +424,50 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(payload["status"], "ok")
 
+    def test_21_memory_crud_and_injection(self):
+        creator = self.token("u_creator")
+        status, memories = request("GET", "/api/memories?limit=100", token=creator)
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(memories["stats"]["active"], 3)
+        status, created = request("POST", "/api/memories", {
+            "scope": "user", "type": "preference", "content": "我偏好先看结论，再看引用依据。",
+            "importance": 2,
+        }, token=creator)
+        self.assertEqual(status, 201, created)
+        self.assertTrue(str(created["owner"]) == "u_creator")
+        status, deduped = request("POST", "/api/memories", {
+            "scope": "user", "type": "preference", "content": "我偏好先看结论，再看引用依据。",
+            "importance": 3,
+        }, token=creator)
+        self.assertEqual(status, 200)
+        self.assertTrue(deduped["deduped"])
+        memory_id = created["id"]
+        status, updated = request("PUT", f"/api/memories/{memory_id}", {"status": "deleted"}, token=creator)
+        self.assertEqual(status, 200)
+        self.assertEqual(updated["status"], "deleted")
+        # 注入：app1 已开启 memory_enabled；医生用户记忆命中“抗感染”
+        doctor = self.token("u_doctor")
+        status, mem = request("POST", "/api/memories", {
+            "scope": "user", "type": "fact", "content": "抗感染治疗需关注疗程与耐药风险。",
+            "importance": 3,
+        }, token=doctor)
+        self.assertEqual(status, 201)
+        status, trial = request("POST", "/api/apps/1/trial",
+                                {"query": "社区获得性肺炎抗感染治疗原则"}, token=doctor)
+        self.assertEqual(status, 200)
+        self.assertTrue(trial["memory"]["enabled"])
+        self.assertGreaterEqual(trial["memory"]["injected"], 1)
+        self.assertIn("结合历史记忆", trial["output"])
+        self.assertTrue(any(step["type"] == "memory" for step in trial["trace"]))
+        # 患者无记忆权限；硬删除仅管理员
+        patient = self.token("u_patient")
+        status, _ = request("GET", "/api/memories", token=patient)
+        self.assertEqual(status, 403)
+        admin = self.token("u_admin")
+        status, hard = request("DELETE", f"/api/memories/{memory_id}?hard=1", token=admin)
+        self.assertEqual(status, 200)
+        self.assertTrue(hard["hard"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

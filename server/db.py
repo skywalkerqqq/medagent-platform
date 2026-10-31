@@ -257,6 +257,23 @@ CREATE TABLE IF NOT EXISTS handoffs (
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    scope TEXT,                         -- user | agent | tenant
+    owner TEXT,                         -- user_id / app_id / default
+    type TEXT,                          -- preference | fact | summary | instruction
+    content TEXT,
+    importance INTEGER DEFAULT 2,
+    source TEXT DEFAULT 'manual',
+    status TEXT DEFAULT 'active',       -- active | deleted
+    use_count INTEGER DEFAULT 0,
+    content_hash TEXT,
+    created_at TEXT,
+    updated_at TEXT,
+    last_used_at TEXT,
+    expires_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON auth_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_apps_status ON apps(status);
 CREATE INDEX IF NOT EXISTS idx_versions_app ON app_versions(app_id, version);
@@ -269,6 +286,8 @@ CREATE INDEX IF NOT EXISTS idx_calls_app ON model_calls(app_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_bindings_user ON patient_bindings(user_id, status);
 CREATE INDEX IF NOT EXISTS idx_reports_patient ON reports(patient_ref);
 CREATE INDEX IF NOT EXISTS idx_followups_patient ON followup_tasks(patient_ref, status);
+CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, owner, status);
+CREATE INDEX IF NOT EXISTS idx_memories_hash ON memories(content_hash);
 """
 
 

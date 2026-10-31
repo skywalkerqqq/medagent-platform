@@ -111,3 +111,14 @@
 - 微信 openid 不等同医疗身份，绑定需核验+授权；
 - 模型调用日志按最小必要记录；患者敏感信息不进入普通日志；
 - 写操作幂等/重复提交由状态机与审批状态约束（重复审批 409）。
+
+## 10. 记忆（扩展，AgentHub v1.2 重建）
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | /api/memories | memory:read | 列表/统计；筛选 scope/type/status/q |
+| POST | /api/memories | memory:write | `{scope:user\|agent\|tenant, owner?, type, content, importance?, expires_at?}`；重复内容返回 200 `deduped=true` |
+| PUT | /api/memories/{id} | memory:write | 更新 content/importance/expires_at/status（非管理员仅 user 范围本人） |
+| DELETE | /api/memories/{id} | memory:write | 软删；`?hard=1` 仅管理员硬删 |
+
+试跑注入：应用配置 `memory_enabled=true` 时，检索 user=当前用户、agent=当前应用、tenant=default 的活跃未过期记忆 Top3，输出标注「结合历史记忆」，Trace 增加 `memory` 步骤并累计 `use_count`。患者端不使用临床记忆。

@@ -33,7 +33,7 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 测试：
 
 ```powershell
-python tests/test_api.py     # 19 项接口验收测试
+python tests/test_api.py     # 20 项接口验收测试
 ```
 
 或 `scripts/check.ps1`（测试 + 前端 JS 语法检查）。
@@ -47,7 +47,8 @@ python tests/test_api.py     # 19 项接口验收测试
 | 身份 | 服务端 Token 会话（8h）、登录/退出、角色权限；**拒绝 X-User-Id 作为身份** | FR-001 / §8.1 |
 | 机构/角色 | 用户-角色-科室；页面/API/数据查询权限校验 | FR-002 |
 | 应用工厂 | 2 个模板、创建/配置、试跑（输出+引用+免责+版本+降级） | FR-003 |
-| 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
+| 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→记忆→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
+| 记忆（扩展） | 三级范围（用户/应用/租户）× 四类（偏好/事实/摘要/指令）、去重/软删/硬删、试跑注入（memory 轨迹 + use_count） | AgentHub v1.2 能力重建（非 v1.1 必需） |
 | 评测门禁 | 评测集、指标（召回/引用/答案正确/编造/检出）、阈值、未达标阻断发布 | FR-004 |
 | 审批发布 | 科室→平台两级审批；发布版本快照；停用/回滚；发布人/审批人/版本可追溯 | FR-005 |
 | 模型网关 | 模型注册、策略链、超时/降级显式标记、密钥/调用记录；小程序不直连模型 | FR-006 |
@@ -83,6 +84,7 @@ server/app.py（零依赖 HTTP，静态托管 + API 路由 + Token 中间件）
   ├─ knowledge.py   知识导入/审核/版本/生效失效/检索引用
   ├─ models.py      模型注册、策略链、降级、调用记录
   ├─ eval_center.py 评测集、指标、门禁、结果
+  ├─ memory.py      长期记忆（三级范围/去重/软删硬删/试跑注入）
   ├─ engine.py      生成引擎（模板 + 检索 + 安全 + 网关）
   ├─ safety.py      禁止输出、风险阻断、人工接管
   ├─ ops.py         指标口径、BadCase、审计
@@ -90,7 +92,7 @@ server/app.py（零依赖 HTTP，静态托管 + API 路由 + Token 中间件）
   ├─ wechat.py      微信登录（真实/ dev mock）
   └─ seed.py        合成种子数据（用户/知识/应用/评测/患者）
 web/                 index.html + app.css + app.js（无构建）
-tests/test_api.py    19 项验收测试（真实进程 + HTTP）
+tests/test_api.py    20 项验收测试（真实进程 + HTTP）
 docs/                需求映射、接口契约
 screenshots/         真实运行截图
 ```
@@ -145,6 +147,8 @@ screenshots/         真实运行截图
 | GET | `/api/approvals` | 待审批列表（按角色） |
 | POST | `/api/approvals/{id}/decide` | 通过/拒绝（科室→平台） |
 | GET/POST | `/api/knowledge` | 知识列表/导入 |
+| GET/POST | `/api/memories` | 记忆列表/新建（user/agent/tenant × 四类） |
+| PUT/DELETE | `/api/memories/{id}` | 更新/软删（`?hard=1` 管理员硬删） |
 | POST | `/api/knowledge/{id}/review` | 审核 |
 | GET | `/api/knowledge/search?q=` | 检索（仅生效+审核+范围） |
 | GET | `/api/models` / `/api/model-policies` | 模型/策略 |
@@ -176,9 +180,9 @@ screenshots/         真实运行截图
 |---|---|
 | ![运营](screenshots/06-ops.png) | ![知识](screenshots/07-knowledge.png) |
 
-| 患者端（小程序联动） |
-|---|
-| ![患者端](screenshots/08-patient.png) |
+| 长期记忆（三级范围/注入） | 患者端（小程序联动） |
+|---|---|
+| ![记忆](screenshots/10-memory.png) | ![患者端](screenshots/08-patient.png) |
 
 ---
 
