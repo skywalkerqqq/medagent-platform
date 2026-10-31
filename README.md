@@ -35,6 +35,7 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 ```powershell
 python tests/test_api.py       # 24 项接口验收测试
 python tests/test_llm_live.py  # 3 项真实模型上游测试（fake OpenAI）
+python tests/test_dify.py      # 4 项 Dify 适配测试（fake Dify）
 ```
 
 或 `scripts/check.ps1`（测试 + 前端 JS 语法检查）。
@@ -52,6 +53,7 @@ python tests/test_llm_live.py  # 3 项真实模型上游测试（fake OpenAI）
 | 报告编辑（扩展） | 报告草稿生成（JSON）→ 医生编辑 → 签名 → 修改率/审计；支持缺失字段提示 | PRD v2.0 临床工作台 FR-40 |
 | 数据集成（扩展） | HIS/EMR/PACS **mock**：患者上下文聚合、签名报告回写 HIS（幂等/外部 ID/审计）、集成调用记录 | PRD v2.0 §10；真实接口待院方 |
 | 患者小程序（扩展） | `miniprogram/`：微信登录→绑定→报告→随访→危险信号转人工；4 个页面 | v1.1 FR-012/013 + PRD 渠道 |
+| Dify 长尾适配（扩展） | Dify 应用登记/chat/workflow blocking 调用；未配置拒绝、上游失败不伪造、调用记录；不修改 Dify 源码 | PRD v2.0 应用工厂模式 B |
 | 记忆（扩展） | 三级范围 × 四类、去重/软删/硬删、**session 会话结束写摘要 / auto 运行后自动写入**、**64 维 bigram 向量检索**、试跑注入轨迹 | AgentHub v1.2 能力重建（非 v1.1 必需） |
 | 运行记录（扩展） | 每次试跑落 runs（应用/用户/输入/降级/记忆写入），运营台可查 | 旧版运行记录能力吸收 |
 | 评测门禁 | 评测集、指标（召回/引用/答案正确/编造/检出）、阈值、未达标阻断发布 | FR-004 |
@@ -152,6 +154,8 @@ screenshots/         真实运行截图
 | GET/POST | `/api/reports`、`/api/reports/draft` | 报告草稿列表/生成 |
 | GET | `/api/integrations/status`、`/api/integrations/patient/{ref}` | HIS/EMR/PACS mock 状态与患者上下文 |
 | POST | `/api/integrations/report-writeback` | 签名报告回写 HIS（幂等） |
+| GET/POST | `/api/integrations/dify/apps`、`/api/integrations/dify/status` | Dify 应用登记/状态 |
+| POST | `/api/integrations/dify/apps/{id}/run` | 平台内调用 Dify（chat/workflow） |
 | PUT/POST | `/api/reports/{id}`、`/api/reports/{id}/sign` | 编辑/签名（记录修改率） |
 | GET | `/api/apps/{id}/release-check` | 发布前逐项检查 |
 | POST | `/api/apps/{id}/submit` | 提交发布（进入科室审批） |

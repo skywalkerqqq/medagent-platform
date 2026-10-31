@@ -116,6 +116,15 @@
 | POST | /api/integrations/report-writeback | report:write | `{report_id}`；仅已签名；幂等，返回 external_id |
 | GET | /api/integrations/calls | report:read | 集成调用记录 |
 
+## 7.9 Dify 长尾适配
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | /api/integrations/dify/status | 登录 | 是否配置（DIFY_BASE_URL/DIFY_API_KEY） |
+| GET | /api/integrations/dify/apps | model:read | 已登记应用 |
+| POST | /api/integrations/dify/apps | model:read | `{name, app_type: chat|workflow, base_url?, app_id?, api_key_env?}` |
+| POST | /api/integrations/dify/apps/{id}/run | app:trial | `{query}` → blocking 调用；未配置 400 dify_not_configured；上游失败 502 dify_upstream |
+
 ## 8. 错误码
 
 | code | HTTP | 含义 |

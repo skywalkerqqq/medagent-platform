@@ -99,6 +99,15 @@
 | 调用记录 | ✅ | `/api/integrations/calls`；数据集成页可查 |
 | 真实对接 | ⬜ | HIS/EMR/PACS 接口、字段映射、授权与脱敏须院方确认 |
 
+## 七、扩展能力：Dify 长尾适配（POC）
+
+| 能力 | 实现 |
+|---|---|
+| 应用登记 | ✅ `/api/integrations/dify/apps`（chat/workflow，App ID/URL/Key 环境变量） |
+| 平台内运行 | ✅ `/api/integrations/dify/apps/{id}/run` blocking 调用；未配置 400，上游失败 502 且记录 failed |
+| 记录 | ✅ `integration_calls`（integration=dify）；不修改 Dify 源码 |
+| 真实联调 | ⬜ 需可达 Dify 地址 + App API Key（fake 已验证协议） |
+
 ## 八、扩展能力：患者小程序（POC）
 
 | 页面 | 能力 | 接口 |

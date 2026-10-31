@@ -305,6 +305,13 @@ def seed(conn) -> bool:
              memory_module.content_hash(scope, owner, type_, content),
              memory_module.embedding_json(content), db.iso(), db.iso()),
         )
+    # Dify 长尾应用登记示例（POC 不部署 Dify；配置 DIFY_BASE_URL/API_KEY 后可运行）
+    conn.execute(
+        "INSERT INTO dify_apps(code, name, base_url, app_id, app_type, api_key_env, status, created_by, created_at) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        ("DIFY-001", "营销文案生成（Dify 示例）", "http://dify.internal/app/demo", "app-mkt-demo",
+         "chat", "DIFY_API_KEY", "registered", "u_admin", db.iso()),
+    )
     # 患者端
     conn.executemany(
         "INSERT INTO patients(patient_ref, name_mask, phone_mask, institution, created_at) VALUES (?,?,?,?,?)",

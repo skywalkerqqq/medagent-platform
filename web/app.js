@@ -1026,9 +1026,13 @@ async function writebackReport() {
 async function renderIntegrations(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const [status, calls] = await Promise.all([
+    const [status, calls, difyStatus, difyApps] = await Promise.all([
       api('/api/integrations/status'), api('/api/integrations/calls').catch(() => ({ items: [] })),
+      api('/api/integrations/dify/status').catch(() => ({ configured: false, apps: 0, detail: '未配置' })),
+      api('/api/integrations/dify/apps').catch(() => ({ items: [] })),
     ]);
+    const canRegisterDify = has('model:read');
+    const canRunDify = has('app:trial');
     view.innerHTML = `
       <div class="grid grid-3">
         ${status.items.map((item) => `<div class="card">
@@ -1052,12 +1056,66 @@ async function renderIntegrations(view) {
               <td class="mono small">${esc(call.external_id || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">暂无调用（在报告编辑器签名后“回写 HIS”会生成）</td></tr>'}
           </tbody></table></div>
         </div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">Dify 长尾应用（PRD v2.0 应用工厂的另一模式）</h3>
+        <div class="alert ${difyStatus.configured ? 'ok' : 'amber'} small">${esc(difyStatus.detail || '未配置')} · 已登记 ${difyStatus.apps || 0} 个应用。平台不修改 Dify 源码，仅通过 API 调用。</div>
+        ${canRegisterDify ? `<form id="dify-form" style="margin-top:12px">
+          <div class="form-row">
+            <label class="field"><span>应用名称</span><input id="dify-name" placeholder="例如：合同摘要生成（Dify）" required /></label>
+            <label class="field"><span>类型</span><select id="dify-type"><option value="chat">chat</option><option value="workflow">workflow</option></select></label>
+          </div>
+          <div class="form-row">
+            <label class="field"><span>Dify 应用地址（可选，覆盖环境变量）</span><input id="dify-base" placeholder="https://dify.example.com" /></label>
+            <label class="field"><span>App ID（登记用）</span><input id="dify-appid" placeholder="app-xxxx" /></label>
+          </div>
+          <button class="btn btn-primary btn-sm" type="submit">登记 Dify 应用</button>
+        </form>` : '<div class="small muted">仅管理/平台审批角色可登记。</div>'}
+        <div class="table-wrap" style="margin-top:14px"><table><thead><tr><th>编号</th><th>名称</th><th>类型</th><th>状态</th><th>App ID</th><th>操作</th></tr></thead><tbody>
+          ${difyApps.items.map((app) => `<tr><td class="mono small">${esc(app.code)}</td><td>${esc(app.name)}</td>
+            <td>${esc(app.app_type)}</td><td><span class="pill ${difyStatus.configured ? 'green' : 'gray'}">${difyStatus.configured ? '可运行' : '未配置'}</span></td>
+            <td class="mono small">${esc(app.app_id || '—')}</td>
+            <td>${canRunDify ? `<button class="btn btn-outline btn-sm" onclick="MA.runDify(${app.id})">测试运行</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">暂无登记（种子含 1 个示例）</td></tr>'}
+        </tbody></table></div>
+        <div id="dify-result" style="margin-top:12px"></div>
       </div>`;
     $('#integration-patient').addEventListener('keydown', (event) => {
       if (event.key === 'Enter') queryIntegration();
     });
+    const difyForm = $('#dify-form');
+    if (difyForm) {
+      difyForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        try {
+          await api('/api/integrations/dify/apps', { method: 'POST', body: {
+            name: $('#dify-name').value.trim(), base_url: $('#dify-base').value.trim(),
+            app_id: $('#dify-appid').value.trim(), app_type: $('#dify-type').value,
+          } });
+          toast('Dify 应用已登记');
+          route();
+        } catch (error) { toast(error.message, 'error'); }
+      });
+    }
   } catch (error) {
     view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function runDify(id) {
+  const query = window.prompt('输入发给 Dify 应用的内容（需配置 DIFY_BASE_URL/DIFY_API_KEY）');
+  if (!query) return;
+  const box = $('#dify-result');
+  if (box) box.innerHTML = '<div class="muted small">调用中…</div>';
+  try {
+    const result = await api(`/api/integrations/dify/apps/${id}/run`, { method: 'POST', body: { query } });
+    if (box) {
+      box.innerHTML = `<div class="alert ok">Dify ${esc(result.app_type)} 调用成功 · ${result.tokens} tokens · ${result.latency_ms}ms</div>
+        <div class="pre">${esc(result.answer)}</div>`;
+    }
+    toast('Dify 调用成功');
+  } catch (error) {
+    if (box) box.innerHTML = `<div class="alert red">${esc(error.message)}</div>`;
+    toast(error.message, 'error');
   }
 }
 
@@ -1717,7 +1775,7 @@ window.MA = {
   pgCloseSession, searchMemory,
   memoryToggle, memoryDelete,
   searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, testPolicy, runEval, showEvalRun,
-  generateReportDraft, openReport, saveReport, signReport, writebackReport, queryIntegration,
+  generateReportDraft, openReport, saveReport, signReport, writebackReport, queryIntegration, runDify,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,
 };

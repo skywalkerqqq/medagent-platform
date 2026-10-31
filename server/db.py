@@ -95,6 +95,19 @@ CREATE TABLE IF NOT EXISTS integration_calls (
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS dify_apps (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE,
+    name TEXT NOT NULL,
+    base_url TEXT,
+    app_id TEXT,
+    app_type TEXT DEFAULT 'chat',       -- chat | workflow
+    api_key_env TEXT DEFAULT 'DIFY_API_KEY',
+    status TEXT DEFAULT 'registered',
+    created_by TEXT,
+    created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS faqs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT NOT NULL,
