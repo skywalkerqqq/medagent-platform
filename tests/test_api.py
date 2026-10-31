@@ -123,7 +123,7 @@ class MediAgentV11Test(unittest.TestCase):
         status, payload = request("GET", "/api/templates", token=token)
         self.assertEqual(status, 200)
         keys = {item["key"] for item in payload["items"]}
-        self.assertEqual(keys, {"med-knowledge", "med-qc"})
+        self.assertEqual(keys, {"med-knowledge", "med-qc", "med-report"})
         self.assertTrue(all("eval_threshold" in item for item in payload["items"]))
 
     def test_03_knowledge_filtering_and_review(self):
@@ -469,7 +469,42 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(listing["embedding_dim"], 64)
         self.assertGreaterEqual(listing["stats"]["with_embedding"], 1)
 
-    def test_23_server_stable(self):
+    def test_24_faq_and_report_template(self):
+        knowledge = self.token("u_knowledge")
+        # FAQ：创建 -> 待审不参与检索 -> 审核通过后参与
+        status, faq = request("POST", "/api/faqs", {
+            "question": "POC 测试 FAQ：报告多久出？",
+            "answer": "POC 测试回答：通常 2 个工作日内出具。",
+            "source": "测试", "scope": ["公共"],
+        }, token=knowledge)
+        self.assertEqual(status, 201, faq)
+        status, search = request("GET", "/api/knowledge/search?q=POC测试FAQ报告多久出", token=knowledge)
+        self.assertEqual(status, 200)
+        self.assertFalse(any(hit.get("type") == "faq" and hit["title"].startswith("POC 测试 FAQ") for hit in search["hits"]))
+        status, _ = request("POST", f"/api/faqs/{faq['id']}/review", {"decision": "approve"}, token=knowledge)
+        self.assertEqual(status, 200)
+        status, search = request("GET", "/api/knowledge/search?q=POC测试FAQ报告多久出", token=knowledge)
+        self.assertTrue(any(hit.get("type") == "faq" and "POC 测试 FAQ" in hit["title"] for hit in search["hits"]))
+        status, _ = request("POST", "/api/faqs", {"question": "x", "answer": "y"}, token=self.token("u_creator"))
+        self.assertEqual(status, 403)
+
+        # 报告初稿模板：创建、试跑、评测门禁
+        creator = self.token("u_creator")
+        status, app = request("POST", "/api/apps", {"name": "报告初稿 POC", "template_key": "med-report"}, token=creator)
+        self.assertEqual(status, 201, app)
+        report_app_id = app["id"]
+        status, trial = request("POST", f"/api/apps/{report_app_id}/trial",
+                                {"query": "胸部 CT：右肺结节，未描述大小"}, token=creator)
+        self.assertEqual(status, 200, trial)
+        self.assertIn('"findings"', trial["output"])
+        self.assertIn("病灶大小", trial["output"])
+        evaluator = self.token("u_eval")
+        status, run = request("POST", "/api/eval/run", {"app_id": report_app_id}, token=evaluator)
+        self.assertEqual(status, 200, run)
+        self.assertEqual(run["threshold"], 0.75)
+        self.assertTrue(run["passed"], run)
+
+    def test_25_server_stable(self):
         status, payload = request("GET", "/api/health")
         self.assertEqual(status, 200)
         self.assertEqual(payload["status"], "ok")

@@ -160,6 +160,12 @@ def seed(conn) -> bool:
     ]
     ds_knowledge = _insert_eval_dataset(conn, "ds-knowledge", "知识问答金标准集 v1", "med-knowledge", knowledge_cases)
     ds_qc = _insert_eval_dataset(conn, "ds-qc", "病历质控金标准集 v1", "med-qc", qc_cases)
+    report_cases = [
+        ("右肺上叶结节 8mm，边界清楚", "findings,impression,recommendation"),
+        ("腹部超声：肝实质回声增强，考虑脂肪肝", "findings,impression,recommendation"),
+        ("胸部 CT：右肺结节，未见大小描述", "findings,missing_fields,recommendation"),
+    ]
+    _insert_eval_dataset(conn, "ds-report", "报告初稿金标准集 v1", "med-report", report_cases)
     # 应用
     knowledge_config = dict(templates_mod.TEMPLATES["med-knowledge"]["config"])
     knowledge_config.update({"prompt_version": 1, "template_version": 1, "memory_enabled": True,
@@ -181,6 +187,15 @@ def seed(conn) -> bool:
         ("APP-0002", "病历质控试点", "med-qc", 1, "u_creator", "心血管内科",
          "draft", "medium", json.dumps(qc_config, ensure_ascii=False), 0, db.iso(), db.iso()),
     ).lastrowid
+    report_config = dict(templates_mod.TEMPLATES["med-report"]["config"])
+    report_config.update({"prompt_version": 1, "template_version": 1})
+    conn.execute(
+        """INSERT INTO apps(code, name, template_key, template_version, owner_id, department, status,
+               risk_level, config, current_version, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        ("APP-0003", "影像报告初稿演示", "med-report", 1, "u_creator", "心血管内科",
+         "draft", "medium", json.dumps(report_config, ensure_ascii=False), 0, db.iso(), db.iso()),
+    )
     snapshot = {
         "app_id": app_knowledge, "config": knowledge_config, "template_key": "med-knowledge",
         "template_version": 1, "prompt_version": 1, "model_policy": "precise",
@@ -249,6 +264,21 @@ def seed(conn) -> bool:
             (app_qc, "precise", "mock-fallback", 1, 95, 120, 0.00024, "", db.iso()),
         ],
     )
+    # FAQ（知识中心补充；旧版 FAQ 能力吸收）
+    seed_faqs = [
+        ("肺炎患者出院后多久复查？", "一般建议出院后 1–2 周门诊复查，具体以主治医生医嘱为准。", ["公共", "心血管内科"], "医务处", "approved"),
+        ("门诊检验报告怎么领取？", "凭就诊卡/电子健康卡在自助机打印，或通过医院小程序查询。", ["公共"], "门诊部", "approved"),
+        ("输血知情同意书必须谁签字？", "患者本人或合法授权委托人签字；紧急情况按院内应急预案执行。", ["公共"], "医务处", "approved"),
+        ("2027 年新医保政策 FAQ（待审核）", "待审核内容，不参与检索。", ["公共"], "医保办", "pending"),
+    ]
+    for question, answer, scope, source, status in seed_faqs:
+        conn.execute(
+            """INSERT INTO faqs(question, answer, scope, source, status, created_by, reviewed_by,
+                   reviewed_at, created_at, updated_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?)""",
+            (question, answer, json.dumps(scope, ensure_ascii=False), source, status,
+             "u_knowledge", "u_knowledge" if status == "approved" else "", db.iso(), db.iso(), db.iso()),
+        )
     # 长期记忆（试跑注入演示）
     seed_memories = [
         ("agent", str(app_knowledge), "preference", "回答时先给结论，再列引用依据。", 3),

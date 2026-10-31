@@ -66,7 +66,7 @@ def run(ctx):
     if not cases:
         raise common.ApiError(400, "validation", "评测集为空")
 
-    thresholds = {"med-knowledge": 0.85, "med-qc": 0.70}
+    thresholds = {"med-knowledge": 0.85, "med-qc": 0.70, "med-report": 0.75}
     threshold = thresholds.get(app["template_key"], 0.8)
     results = []
     scores = []

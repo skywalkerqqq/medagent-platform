@@ -68,6 +68,35 @@ TEMPLATES = {
     },
 }
 
+TEMPLATES["med-report"] = {
+    "key": "med-report",
+    "name": "报告初稿助手",
+    "version": 1,
+    "risk_level": "medium",
+    "description": "根据检查类型与结构化所见生成报告初稿（所见/印象/建议），医生编辑签名后生效。",
+    "eval_threshold": 0.75,
+    "config": {
+        "model_policy": "private",
+        "knowledge_scope": ["公共", "医学影像"],
+        "channels": ["web"],
+        "output": ["findings", "impression", "recommendation", "missing_fields", "disclaimer"],
+        "temperature": 0.3,
+        "risk_level": "medium",
+        "memory_enabled": False,
+        "memory_write_mode": "off",
+        "memory_search_mode": "vector",
+    },
+    "prompt_system": (
+        "你是报告初稿助手。严格按院内模板输出 JSON：{findings, impression, recommendation, missing_fields, disclaimer}。"
+        "只描述输入中存在的信息，不添加未提供的阳性/阴性结果；不给出确诊结论；缺失字段列入 missing_fields。"
+    ),
+    "prompt_user": "检查类型：{{exam_type}}\n结构化所见：{{findings}}\n模板：{{template_name}}",
+    "output_schema": {
+        "type": "object",
+        "required": ["findings", "impression", "recommendation", "missing_fields", "disclaimer"],
+    },
+}
+
 QC_RULES = [
     ("既往史", "完整性", "高", "入院记录既往史缺失", "补写既往史"),
     ("过敏史", "完整性", "高", "过敏史缺失", "补写过敏史"),

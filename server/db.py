@@ -60,6 +60,21 @@ CREATE TABLE IF NOT EXISTS knowledge_docs (
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS faqs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    scope TEXT,                         -- JSON array
+    source TEXT,
+    status TEXT DEFAULT 'pending',      -- pending | approved | rejected
+    created_by TEXT,
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    review_comment TEXT,
+    created_at TEXT,
+    updated_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS apps (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     code TEXT UNIQUE,
@@ -292,6 +307,7 @@ CREATE TABLE IF NOT EXISTS runs (
     user_id TEXT,
     input TEXT,
     output TEXT,
+    summary_text TEXT,                  -- 记忆摘要用的干净回答（不含注入前缀）
     status TEXT DEFAULT 'succeeded',
     degraded INTEGER DEFAULT 0,
     tokens INTEGER DEFAULT 0,
@@ -308,6 +324,7 @@ CREATE INDEX IF NOT EXISTS idx_approvals_app ON approvals(app_id, kind, status);
 CREATE INDEX IF NOT EXISTS idx_eval_cases_ds ON eval_cases(dataset_id);
 CREATE INDEX IF NOT EXISTS idx_eval_results_run ON eval_results(run_id);
 CREATE INDEX IF NOT EXISTS idx_knowledge_status ON knowledge_docs(status);
+CREATE INDEX IF NOT EXISTS idx_faqs_status ON faqs(status);
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_calls_app ON model_calls(app_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_bindings_user ON patient_bindings(user_id, status);

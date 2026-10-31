@@ -161,6 +161,16 @@ def search_handler(ctx):
     q = common.str_field(query.get("q"), "q", required=True)
     scope = [s for s in (query.get("scope") or "").split(",") if s]
     hits = search(ctx["conn"], q, scope or None, int(query.get("top", 5)))
+    for hit in hits:
+        hit["type"] = "doc"
+    faq_hits = search_faqs(ctx["conn"], q, scope or None, limit=3)
+    for hit in faq_hits:
+        hits.append({
+            "doc_id": 0, "faq_id": hit["faq_id"], "title": hit["title"],
+            "source": hit["source"], "score": hit["score"], "excerpt": hit["answer"],
+            "citation": hit["citation"], "type": "faq",
+        })
+    hits.sort(key=lambda item: -item["score"])
     return 200, {"query": q, "hits": hits, "total": len(hits)}
 
 
@@ -176,10 +186,109 @@ def detail(ctx):
     return 200, data
 
 
+def scope_has_faqs(conn, scope: list[str]) -> bool:
+    rows = conn.execute("SELECT scope FROM faqs WHERE status='approved'").fetchall()
+    scopes = set(scope or [])
+    for row in rows:
+        faq_scope = common.loads(row["scope"], []) or []
+        if "公共" in faq_scope or (scopes & set(faq_scope)):
+            return True
+    return False
+
+
+def search_faqs(conn, query: str, scope: list[str] | None = None, limit: int = 3) -> list[dict]:
+    rows = conn.execute("SELECT * FROM faqs WHERE status='approved'").fetchall()
+    hits = []
+    for row in rows:
+        if scope:
+            faq_scope = common.loads(row["scope"], []) or []
+            if not ("公共" in faq_scope or set(scope) & set(faq_scope)):
+                continue
+        score = _score(query, {"title": row["question"], "content": row["answer"]})
+        if score < 0.25:
+            continue
+        hits.append({
+            "faq_id": row["id"],
+            "title": row["question"],
+            "answer": row["answer"],
+            "source": row["source"] or "院内 FAQ",
+            "score": round(score, 3),
+            "citation": f"[FAQ·{row['question'][:16]}]",
+        })
+    hits.sort(key=lambda item: (-item["score"], item["faq_id"]))
+    return hits[: max(1, min(int(limit or 3), 10))]
+
+
+def list_faqs(ctx):
+    common.require(ctx["user"], "knowledge:read")
+    query = ctx["query"]
+    where, params = [], []
+    if query.get("status"):
+        where.append("status=?")
+        params.append(query["status"])
+    if query.get("q"):
+        where.append("(question LIKE ? OR answer LIKE ?)")
+        keyword = f"%{query['q']}%"
+        params.extend([keyword, keyword])
+    clause = (" WHERE " + " AND ".join(where)) if where else ""
+    limit, offset = common.pagination(query)
+    total = ctx["conn"].execute(f"SELECT COUNT(*) AS c FROM faqs{clause}", params).fetchone()["c"]
+    rows = ctx["conn"].execute(
+        f"SELECT * FROM faqs{clause} ORDER BY id DESC LIMIT ? OFFSET ?", params + [limit, offset]).fetchall()
+    items = []
+    for row in rows:
+        item = dict(row)
+        item["scope"] = common.loads(item["scope"], []) or []
+        items.append(item)
+    return 200, {"items": items, "total": total}
+
+
+def create_faq(ctx):
+    conn, user, body = ctx["conn"], ctx["user"], ctx["body"]
+    common.require(user, "knowledge:write", "仅知识运营/管理员可维护 FAQ")
+    question = common.str_field(body.get("question"), "question", required=True)
+    answer = common.str_field(body.get("answer"), "answer", required=True)
+    source = common.str_field(body.get("source"), "source", default="院内 FAQ")
+    scope = body.get("scope") or ["公共"]
+    if not isinstance(scope, list) or not scope:
+        raise common.ApiError(400, "validation", "scope 必须是非空数组")
+    faq_id = conn.execute(
+        "INSERT INTO faqs(question, answer, scope, source, status, created_by, created_at, updated_at) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (question, answer, common.dumps(scope), source, "pending", user["id"], db.iso(), db.iso()),
+    ).lastrowid
+    common.audit(conn, user["id"], "创建 FAQ", "faq", faq_id, question[:40])
+    conn.commit()
+    return 201, {"id": faq_id, "status": "pending", "note": "待知识审核后生效"}
+
+
+def review_faq(ctx):
+    conn, user, body = ctx["conn"], ctx["user"], ctx["body"]
+    common.require(user, "knowledge:review", "仅知识审核/管理员可审核 FAQ")
+    faq_id = int(ctx["params"]["id"])
+    row = conn.execute("SELECT * FROM faqs WHERE id=?", (faq_id,)).fetchone()
+    if not row:
+        raise common.ApiError(404, "not_found", "FAQ 不存在")
+    decision = common.str_field(body.get("decision"), "decision", required=True)
+    if decision not in ("approve", "reject"):
+        raise common.ApiError(400, "validation", "decision 只能是 approve/reject")
+    status = "approved" if decision == "approve" else "rejected"
+    comment = common.str_field(body.get("comment"), "comment", default="")
+    conn.execute(
+        "UPDATE faqs SET status=?, reviewed_by=?, reviewed_at=?, review_comment=?, updated_at=? WHERE id=?",
+        (status, user["id"], db.iso(), comment, db.iso(), faq_id))
+    common.audit(conn, user["id"], "审核 FAQ", "faq", faq_id, f"{decision} {comment}".strip())
+    conn.commit()
+    return 200, {"id": faq_id, "status": status}
+
+
 ROUTES = [
     ("GET", re.compile(r"^/api/knowledge$"), list_docs),
     ("POST", re.compile(r"^/api/knowledge$"), import_doc),
     ("GET", re.compile(r"^/api/knowledge/search$"), search_handler),
     ("GET", re.compile(r"^/api/knowledge/(?P<id>\d+)$"), detail),
     ("POST", re.compile(r"^/api/knowledge/(?P<id>\d+)/review$"), review_doc),
+    ("GET", re.compile(r"^/api/faqs$"), list_faqs),
+    ("POST", re.compile(r"^/api/faqs$"), create_faq),
+    ("POST", re.compile(r"^/api/faqs/(?P<id>\d+)/review$"), review_faq),
 ]

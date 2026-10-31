@@ -33,10 +33,21 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
 
     if app["template_key"] == "med-knowledge":
         hits = knowledge.search(conn, query, scope, limit=3)
-        if hits:
-            citations = hits
-            lines = [f"【{idx + 1}】{hit['excerpt']}" for idx, hit in enumerate(hits[:3])]
-            answer = "根据院内已审核知识：\n" + "\n".join(lines)
+        faq_hits = knowledge.search_faqs(conn, query, scope, limit=2)
+        citations = []
+        lines = []
+        for hit in hits:
+            citations.append(hit)
+            lines.append(f"【{len(lines) + 1}】{hit['excerpt']}")
+        for faq in faq_hits:
+            citations.append({
+                "doc_id": 0, "faq_id": faq["faq_id"], "title": faq["title"],
+                "source": faq["source"], "version": 1, "excerpt": faq["answer"],
+                "citation": faq["citation"], "score": faq["score"],
+            })
+            lines.append(f"【FAQ】{faq['title']}：{faq['answer'][:120]}")
+        if lines:
+            answer = "根据院内已审核知识与 FAQ：\n" + "\n".join(lines)
         else:
             answer = "未找到明确依据。建议人工检索或咨询专科医生，AI 不提供确定性结论。"
     elif app["template_key"] == "med-qc":
@@ -57,9 +68,25 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
             "summary": f"共发现 {len(defects)} 项缺陷，需质控人员确认。",
             "disclaimer": DISCLAIMER,
         }, ensure_ascii=False)
+    elif app["template_key"] == "med-report":
+        missing = []
+        lowered = (query or "").lower()
+        if "mm" not in lowered and "cm" not in lowered:
+            missing.append("病灶大小")
+        if "部位" not in (query or "") and "肺" not in (query or "") and "肝" not in (query or ""):
+            missing.append("检查部位")
+        answer = json.dumps({
+            "findings": (query or "").strip() or "未见结构化所见",
+            "impression": "考虑相关影像学改变，建议结合临床",
+            "recommendation": "建议随访复查" if missing else "建议结合临床进一步评估",
+            "missing_fields": missing,
+            "disclaimer": DISCLAIMER,
+        }, ensure_ascii=False)
     else:
         raise common.ApiError(400, "template_missing", "不支持的模板")
 
+    # 记忆摘要使用“干净回答”（注入记忆前），避免摘要嵌套上一次的记忆内容
+    core_answer = answer
     if config.get("memory_enabled") and user_id:
         search_mode = config.get("memory_search_mode") or "vector"
         memory_hits = memory.retrieve(conn, app["id"], user_id, query, mode=search_mode)
@@ -152,6 +179,7 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
         "cost": cost,
         "model": gateway,
         "trace": trace,
+        "summary_text": core_answer[:300],
         "memory": {"enabled": bool(config.get("memory_enabled")),
                    "injected": len(memory_hits),
                    "search_mode": config.get("memory_search_mode") or "vector",

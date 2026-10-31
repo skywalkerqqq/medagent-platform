@@ -244,10 +244,11 @@ def trial(ctx):
         ).lastrowid
     result = engine.generate(conn, app, query, user["department"] or "", user_id=user["id"])
     run_id = conn.execute(
-        """INSERT INTO runs(app_id, session_id, user_id, input, output, status, degraded, tokens, cost,
-               latency_ms, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
-        (app["id"], session_id, user["id"], query, result["output"], "succeeded",
-         1 if result["degraded"] else 0, result["tokens"], result["cost"], result["latency_ms"], db.iso()),
+        """INSERT INTO runs(app_id, session_id, user_id, input, output, summary_text, status, degraded, tokens, cost,
+               latency_ms, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (app["id"], session_id, user["id"], query, result["output"], result.get("summary_text", ""),
+         "succeeded", 1 if result["degraded"] else 0, result["tokens"], result["cost"],
+         result["latency_ms"], db.iso()),
     ).lastrowid
     config = _config(app)
     write_mode = config.get("memory_write_mode") or "off"

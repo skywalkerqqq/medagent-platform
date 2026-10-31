@@ -8,7 +8,7 @@
 |---|---|---|---|
 | FR-001 | 统一登录与会话管理 | ✅ | `auth.py`：登录/退出/8h Token；未认证 401；`X-User-Id` 不被信任（测试 test_01） |
 | FR-002 | 机构/科室/角色权限 | ✅ | `common.ROLE_PERMISSIONS` + 各 handler 校验；页面/API/数据范围；越权 403（test_07/13/14/15） |
-| FR-003 | 模板创建、配置、试跑 | ✅ | `templates.py` 2 模板；`apps.create_app/update_app/trial`；试跑返回引用/免责/版本（test_04） |
+| FR-003 | 模板创建、配置、试跑 | ✅ | `templates.py` 3 模板（知识问答/病历质控/报告初稿）；`apps.create_app/update_app/trial`；试跑返回引用/免责/版本（test_04） |
 | FR-004 | 评测与发布门禁 | ✅ | `eval_center.py`；`release_check` 5 项；未达标 409 阻断（test_05/06） |
 | FR-005 | 审批、发布、停用、回滚 | ✅ | 科室→平台双审批；版本快照；`disable/rollback`；操作者/时间/理由（test_07） |
 | FR-006 | 模型网关与策略 | 🟡 | `models.py`：模型/策略/降级/调用记录/超时配置；真实模型 endpoint 未接入（POC 模拟） |

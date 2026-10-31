@@ -533,6 +533,13 @@ function pgQuickQuestions(app) {
       '出院小结缺少医师签名',
     ];
   }
+  if (app.template_key === 'med-report') {
+    return [
+      '胸部 CT：右肺上叶结节 8mm，边界清楚',
+      '腹部超声：肝实质回声增强，考虑脂肪肝',
+      '胸部 CT：右肺结节，未描述大小',
+    ];
+  }
   return [
     '社区获得性肺炎抗感染治疗原则是什么？',
     '华法林与哪些药物相互作用？',
@@ -735,6 +742,27 @@ async function renderAppDetail(view, id) {
           </tbody></table></div>` : '<div class="muted small">暂无版本</div>'}
         </div>
       </div>
+      ${canEdit && ['draft', 'testing'].includes(app.status) ? `<div class="card">
+        <h3 class="section-title">记忆与运行配置</h3>
+        <p class="section-sub">仅草稿/测试状态可修改；auto=每次运行后写摘要，session=结束会话时写摘要，vector=64 维向量检索。</p>
+        <div class="form-row">
+          <label class="field"><span>启用长期记忆</span>
+            <select id="mem-enabled">
+              <option value="1" ${app.config.memory_enabled ? 'selected' : ''}>开启</option>
+              <option value="0" ${app.config.memory_enabled ? '' : 'selected'}>关闭</option>
+            </select></label>
+          <label class="field"><span>写入模式</span>
+            <select id="mem-write-mode">
+              ${['off', 'session', 'auto'].map((mode) => `<option value="${mode}" ${(app.config.memory_write_mode || 'off') === mode ? 'selected' : ''}>${mode}</option>`).join('')}
+            </select></label>
+          <label class="field"><span>检索模式</span>
+            <select id="mem-search-mode">
+              <option value="vector" ${(app.config.memory_search_mode || 'vector') === 'vector' ? 'selected' : ''}>向量（64 维）</option>
+              <option value="bigram" ${(app.config.memory_search_mode || 'vector') === 'bigram' ? 'selected' : ''}>关键词（bigram）</option>
+            </select></label>
+        </div>
+        <div class="form-actions"><button class="btn btn-primary btn-sm" onclick="MA.saveMemoryConfig()">保存记忆配置</button></div>
+      </div>` : ''}
       <div class="card">
         <h3 class="section-title">试跑（不发布也能验证）</h3>
         <p class="section-sub">试跑显示输出、引用、免责声明、版本与降级标记；模型不可用时按故障安全提示人工处理。</p>
@@ -831,11 +859,27 @@ async function disableApp() {
   } catch (error) { toast(error.message, 'error'); }
 }
 
+async function saveMemoryConfig() {
+  const app = window.MA.currentApp;
+  if (!app) return;
+  try {
+    await api(`/api/apps/${app.id}`, { method: 'PUT', body: {
+      memory_enabled: $('#mem-enabled').value === '1',
+      memory_write_mode: $('#mem-write-mode').value,
+      memory_search_mode: $('#mem-search-mode').value,
+    } });
+    toast('记忆配置已保存');
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
 /* ---------------------------------------------------------------- 知识中心 */
 async function renderKnowledge(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const data = await api('/api/knowledge?limit=100');
+    const [data, faqData] = await Promise.all([
+      api('/api/knowledge?limit=100'), api('/api/faqs?limit=100'),
+    ]);
     const canWrite = has('knowledge:write');
     const canReview = has('knowledge:review');
     view.innerHTML = `
@@ -882,6 +926,35 @@ async function renderKnowledge(view) {
               <button class="btn btn-danger btn-sm" onclick="MA.reviewDoc(${doc.id},'reject')">拒绝</button>` : '<span class="muted small">—</span>'}</td>
           </tr>`).join('')}
         </tbody></table></div>
+      </div>
+      <div class="card">
+        <div class="btn-row" style="justify-content:space-between">
+          <div>
+            <h3 class="section-title" style="margin-bottom:4px">FAQ（旧版知识库能力吸收）</h3>
+            <div class="section-sub" style="margin:0">已审核 FAQ 参与知识检索；待审核不生效。</div>
+          </div>
+          ${canWrite ? '<button class="btn btn-primary btn-sm" onclick="MA.toggleFaqForm()">＋ 新建 FAQ</button>' : ''}
+        </div>
+        ${canWrite ? `<form id="faq-form" class="hidden" style="margin-top:12px">
+          <div class="form-row">
+            <label class="field"><span>问题</span><input id="faq-question" required /></label>
+            <label class="field"><span>来源</span><input id="faq-source" value="院内 FAQ" /></label>
+          </div>
+          <label class="field"><span>回答</span><textarea id="faq-answer" required></textarea></label>
+          <label class="field"><span>适用范围（逗号分隔）</span><input id="faq-scope" value="公共" /></label>
+          <button class="btn btn-primary" type="submit">提交审核</button>
+        </form>` : ''}
+        <div class="table-wrap" style="margin-top:12px"><table><thead><tr><th>问题</th><th>回答</th><th>范围</th><th>来源</th><th>状态</th><th>操作</th></tr></thead><tbody>
+          ${(faqData.items || []).map((faq) => `<tr>
+            <td><strong>${esc(faq.question)}</strong></td>
+            <td class="small">${esc(faq.answer)}</td>
+            <td class="small">${(faq.scope || []).join('、')}</td>
+            <td class="small">${esc(faq.source)}</td>
+            <td>${statusPill(faq.status)}</td>
+            <td>${faq.status === 'pending' && canReview ? `<button class="btn btn-ok btn-sm" onclick="MA.reviewFaq(${faq.id},'approve')">通过</button>
+              <button class="btn btn-danger btn-sm" onclick="MA.reviewFaq(${faq.id},'reject')">拒绝</button>` : '<span class="muted small">—</span>'}</td>
+          </tr>`).join('') || '<tr><td colspan="6" class="muted">暂无 FAQ</td></tr>'}
+        </tbody></table></div>
       </div>`;
     if (canWrite) {
       $('#knowledge-form').addEventListener('submit', async (event) => {
@@ -898,6 +971,21 @@ async function renderKnowledge(view) {
           route();
         } catch (error) { toast(error.message, 'error'); }
       });
+      const faqForm = $('#faq-form');
+      if (faqForm) {
+        faqForm.addEventListener('submit', async (event) => {
+          event.preventDefault();
+          try {
+            await api('/api/faqs', { method: 'POST', body: {
+              question: $('#faq-question').value.trim(), answer: $('#faq-answer').value.trim(),
+              source: $('#faq-source').value.trim(),
+              scope: $('#faq-scope').value.split(',').map((s) => s.trim()).filter(Boolean),
+            } });
+            toast('FAQ 已提交审核');
+            route();
+          } catch (error) { toast(error.message, 'error'); }
+        });
+      }
     }
   } catch (error) {
     view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
@@ -923,6 +1011,21 @@ async function reviewDoc(id, decision) {
   try {
     await api(`/api/knowledge/${id}/review`, { method: 'POST', body: { decision, comment } });
     toast(decision === 'approve' ? '已审核通过' : '已拒绝');
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+function toggleFaqForm() {
+  const form = $('#faq-form');
+  if (form) form.classList.toggle('hidden');
+}
+
+async function reviewFaq(id, decision) {
+  const comment = decision === 'approve' ? 'FAQ 审核通过' : (window.prompt('拒绝原因（必填）') || '');
+  if (decision === 'reject' && !comment) return;
+  try {
+    await api(`/api/faqs/${id}/review`, { method: 'POST', body: { decision, comment } });
+    toast(decision === 'approve' ? 'FAQ 已通过' : 'FAQ 已拒绝');
     route();
   } catch (error) { toast(error.message, 'error'); }
 }
@@ -1390,11 +1493,11 @@ async function submitFollowup() {
 
 /* ---------------------------------------------------------------- boot */
 window.MA = {
-  createApp, submitApp, decide, rollback, disableApp, trial,
+  createApp, submitApp, decide, rollback, disableApp, saveMemoryConfig, trial,
   toggleCreate, pgReset,
   pgCloseSession, searchMemory,
   memoryToggle, memoryDelete,
-  searchKnowledge, reviewDoc, testPolicy, runEval, showEvalRun,
+  searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, testPolicy, runEval, showEvalRun,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,
 };

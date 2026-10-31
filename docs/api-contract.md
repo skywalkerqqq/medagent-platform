@@ -46,8 +46,11 @@
 | GET | /api/knowledge | knowledge:read | 列表（可按 status/scope/q） |
 | POST | /api/knowledge | knowledge:write | `{title,source,owner,scope[],effective_at,expires_at?,version?,content}` → 201 pending |
 | POST | /api/knowledge/{id}/review | knowledge:review | `{decision:approve\|reject,comment?}` |
-| GET | /api/knowledge/search?q= | knowledge:read | 仅 approved + 生效期内 + 范围；返回引用 |
+| GET | /api/knowledge/search?q= | knowledge:read | 仅 approved + 生效期内 + 范围；返回文档+FAQ 引用 |
 | GET | /api/knowledge/{id} | knowledge:read | 详情 |
+| GET | /api/faqs | knowledge:read | FAQ 列表（status/q） |
+| POST | /api/faqs | knowledge:write | `{question,answer,source?,scope?}` → 201 pending |
+| POST | /api/faqs/{id}/review | knowledge:review | `{decision:approve\|reject,comment?}`，通过后参与检索 |
 
 ## 4. 模型
 

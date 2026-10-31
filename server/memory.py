@@ -288,12 +288,12 @@ def write_summary(conn, app_id, user_id, runs, source: str, mode: str) -> int | 
     if source == "session":
         inputs = [str(run.get("input") or "")[:40] for run in runs[-3:]]
         content = (f"会话摘要（{len(runs)}轮）：用户询问" + "；".join(f"「{item}」" for item in inputs)
-                   + f"。最近一次建议：{str(runs[-1].get('output') or '')[:120]}")
+                   + f"。最近一次建议：{str(runs[-1].get('summary_text') or runs[-1].get('output') or '')[:120]}")
         scope, owner = "user", str(user_id or "")
     else:
         run = runs[-1]
         content = (f"运行摘要：用户询问「{str(run.get('input') or '')[:60]}」；"
-                   f"系统建议「{str(run.get('output') or '')[:140]}」")
+                   f"系统建议「{str(run.get('summary_text') or run.get('output') or '')[:140]}」")
         scope, owner = "agent", str(app_id)
     digest = content_hash(scope, owner, "summary", content)
     existing = conn.execute(
