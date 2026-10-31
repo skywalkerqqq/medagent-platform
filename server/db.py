@@ -108,6 +108,16 @@ CREATE TABLE IF NOT EXISTS dify_apps (
     created_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS notify_channels (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    kind TEXT DEFAULT 'wecom',          -- wecom | dingtalk | generic
+    webhook_env TEXT DEFAULT 'ALERT_WEBHOOK_URL',
+    status TEXT DEFAULT 'enabled',
+    created_by TEXT,
+    created_at TEXT
+);
+
 CREATE TABLE IF NOT EXISTS faqs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     question TEXT NOT NULL,

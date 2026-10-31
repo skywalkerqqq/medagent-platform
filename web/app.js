@@ -1561,13 +1561,15 @@ async function showEvalRun(id) {
 async function renderOps(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const [metrics, badcases, events, handoffs, runs, alerts, costs] = await Promise.all([
+    const [metrics, badcases, events, handoffs, runs, alerts, costs, channels] = await Promise.all([
       api('/api/ops/metrics'), api('/api/badcases'), api('/api/safety/events').catch(() => ({ items: [] })),
       api('/api/handoffs').catch(() => ({ items: [] })), api('/api/runs?limit=20').catch(() => ({ items: [] })),
       api('/api/ops/alerts').catch(() => ({ items: [] })), api('/api/ops/costs').catch(() => null),
+      api('/api/ops/notify/channels').catch(() => ({ items: [] })),
     ]);
     const m = metrics.values;
     const canManage = has('badcase:manage');
+    const canNotify = has('model:read');
     view.innerHTML = `
       <div class="grid grid-4">
         ${kpi('模型调用', m.model_calls, `降级率 ${pct(m.degrade_rate)}`, 'teal')}
@@ -1582,6 +1584,20 @@ async function renderOps(view) {
           <div class="list-sub">${esc(item.detail)} · 建议：${esc(item.action)}</div></div></div>`).join('')
           : '<div class="alert green">当前无告警。</div>'}
         <div class="small muted" style="margin-top:8px">规则：高风险事件、BadCase 积压、评测通过率、模型降级/失败、知识待审核。</div>
+      </div>
+      <div class="card">
+        <h3 class="section-title">告警通知渠道（企业微信/钉钉）</h3>
+        <p class="section-sub">webhook 地址只从环境变量读取（如 ALERT_WEBHOOK_URL），不在页面展示；未配置渠道不发送。</p>
+        <div class="table-wrap"><table><thead><tr><th>渠道</th><th>类型</th><th>环境变量</th><th>配置状态</th><th>操作</th></tr></thead><tbody>
+          ${channels.items.map((channel) => `<tr><td>${esc(channel.name)}</td><td>${esc(channel.kind)}</td>
+            <td class="mono small">${esc(channel.webhook_env)}</td>
+            <td><span class="pill ${channel.configured ? 'green' : 'gray'}">${channel.configured ? '已配置' : '未配置'}</span></td>
+            <td>${canNotify ? `<button class="btn btn-outline btn-sm" onclick="MA.notifyTestChannel(${channel.id})">测试发送</button>` : '—'}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">暂无渠道</td></tr>'}
+        </tbody></table></div>
+        ${canNotify ? `<div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary btn-sm" onclick="MA.notifyAlerts()">发送当前告警到已配置渠道</button>
+        </div>` : ''}
+        <div id="notify-result" style="margin-top:10px"></div>
       </div>
       <div class="card">
         <h3 class="section-title">指标定义</h3>
@@ -1667,6 +1683,30 @@ async function closeBadcase(id) {
     await api(`/api/badcases/${id}`, { method: 'POST', body: { action: 'close', resolution } });
     toast('已关闭'); route();
   } catch (error) { toast(error.message, 'error'); }
+}
+
+async function notifyTestChannel(id) {
+  const box = $('#notify-result');
+  if (box) box.innerHTML = '<div class="muted small">发送中…</div>';
+  try {
+    const result = await api(`/api/ops/notify/channels/${id}/test`, { method: 'POST' });
+    if (box) box.innerHTML = `<div class="alert ok">测试发送成功：${esc(result.channel)}（${esc(result.kind)}）</div>`;
+    toast('测试通知已发送');
+  } catch (error) {
+    if (box) box.innerHTML = `<div class="alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function notifyAlerts() {
+  const box = $('#notify-result');
+  if (box) box.innerHTML = '<div class="muted small">发送中…</div>';
+  try {
+    const result = await api('/api/ops/alerts/notify', { method: 'POST' });
+    if (box) box.innerHTML = `<div class="alert ok">已发送 ${result.sent.length} 个渠道，包含 ${result.alerts} 条告警。</div>`;
+    toast('告警通知已发送');
+  } catch (error) {
+    if (box) box.innerHTML = `<div class="alert red">${esc(error.message)}</div>`;
+  }
 }
 
 async function loadAudit() {
@@ -1789,6 +1829,7 @@ window.MA = {
   memoryToggle, memoryDelete,
   searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, testPolicy, runEval, showEvalRun,
   generateReportDraft, openReport, saveReport, signReport, writebackReport, queryIntegration, runDify,
+  notifyTestChannel, notifyAlerts,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,
 };

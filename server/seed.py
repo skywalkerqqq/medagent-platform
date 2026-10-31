@@ -305,6 +305,11 @@ def seed(conn) -> bool:
              memory_module.content_hash(scope, owner, type_, content),
              memory_module.embedding_json(content), db.iso(), db.iso()),
         )
+    # 通知渠道示例（webhook 只存环境变量名；未设置 ALERT_WEBHOOK_URL 时不发送）
+    conn.execute(
+        "INSERT INTO notify_channels(name, kind, webhook_env, status, created_by, created_at) VALUES (?,?,?,?,?,?)",
+        ("企业微信-运维群", "wecom", "ALERT_WEBHOOK_URL", "enabled", "u_admin", db.iso()),
+    )
     # Dify 长尾应用登记示例（POC 不部署 Dify；配置 DIFY_BASE_URL/API_KEY 后可运行）
     conn.execute(
         "INSERT INTO dify_apps(code, name, base_url, app_id, app_type, api_key_env, status, created_by, created_at) "

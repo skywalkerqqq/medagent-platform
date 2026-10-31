@@ -78,6 +78,10 @@
 | GET | /api/ops/metrics | metrics:read | 指标定义+当前值 |
 | GET | /api/ops/alerts | metrics:read | 运营告警（风险/积压/失败/降级） |
 | GET | /api/ops/costs?days=30 | metrics:read | 成本对账：总成本/tokens、按应用、按模型 |
+| GET | /api/ops/notify/channels | metrics:read | 通知渠道（webhook 仅环境变量） |
+| POST | /api/ops/notify/channels | model:read | `{name, kind: wecom|dingtalk|generic, webhook_env}` |
+| POST | /api/ops/notify/channels/{id}/test | model:read | 测试发送；未配置 400，失败 502 |
+| POST | /api/ops/alerts/notify | model:read | 当前告警推送到已配置渠道 |
 | GET | /api/dashboard | metrics:read | 指标+检查清单+最近应用/审计 |
 | GET | /api/badcases | metrics:read | 列表 |
 | POST | /api/badcases | badcase:manage | 登记 |
