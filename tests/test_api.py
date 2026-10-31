@@ -366,6 +366,11 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertIn("total", costs)
         self.assertIn("by_app", costs)
         self.assertIsInstance(costs["total"]["cost"], (int, float))
+        status, verify = request("GET", "/api/audit/verify", token=admin)
+        self.assertEqual(status, 200)
+        self.assertTrue(verify["ok"], verify)
+        self.assertGreaterEqual(verify["total"], 1)
+        self.assertEqual(verify["legacy_unhashed"], 0)
 
     def test_14_knowledge_permissions(self):
         creator = self.token("u_creator")

@@ -367,10 +367,6 @@ def seed(conn) -> bool:
         ],
     )
     # 审计
-    conn.execute(
-        "INSERT INTO audit_logs(actor, action, target_type, target_id, detail, created_at) "
-        "VALUES (?,?,?,?,?,?)",
-        ("system", "系统初始化", "system", "", "MediAgent v1.1 种子数据", db.iso()),
-    )
+    common.audit(conn, "system", "系统初始化", "system", "", "MediAgent v1.1 种子数据")
     conn.commit()
     return True

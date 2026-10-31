@@ -259,7 +259,9 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     target_type TEXT,
     target_id TEXT,
     detail TEXT,
-    created_at TEXT
+    created_at TEXT,
+    prev_hash TEXT,
+    hash TEXT
 );
 
 CREATE TABLE IF NOT EXISTS models (

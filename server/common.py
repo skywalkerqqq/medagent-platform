@@ -1,6 +1,7 @@
 """通用工具：错误、权限、审计、入参。"""
 from __future__ import annotations
 
+import hashlib
 import json
 
 ROLE_PERMISSIONS = {
@@ -44,11 +45,25 @@ def require(user, permission: str, message: str = "无权限执行该操作"):
         raise ApiError(403, "forbidden", message)
 
 
+AUDIT_GENESIS = "0" * 64
+
+
+def audit_payload(prev_hash, actor, action, target_type, target_id, detail, created_at):
+    return f"{prev_hash}|{actor}|{action}|{target_type}|{target_id}|{detail}|{created_at}"
+
+
 def audit(conn, actor, action, target_type="", target_id="", detail=""):
+    created_at = db_iso()
+    last = conn.execute("SELECT hash FROM audit_logs ORDER BY id DESC LIMIT 1").fetchone()
+    prev_hash = (last["hash"] if last and last["hash"] else AUDIT_GENESIS)
+    digest = hashlib.sha256(
+        audit_payload(prev_hash, actor, action, target_type, str(target_id), detail, created_at)
+        .encode("utf-8")
+    ).hexdigest()
     conn.execute(
-        "INSERT INTO audit_logs(actor, action, target_type, target_id, detail, created_at) "
-        "VALUES (?,?,?,?,?,?)",
-        (actor, action, target_type, str(target_id), detail, db_iso()),
+        "INSERT INTO audit_logs(actor, action, target_type, target_id, detail, created_at, prev_hash, hash) "
+        "VALUES (?,?,?,?,?,?,?,?)",
+        (actor, action, target_type, str(target_id), detail, created_at, prev_hash, digest),
     )
 
 

@@ -1721,9 +1721,10 @@ async function renderOps(view) {
         <h3 class="section-title">审计日志</h3>
         <div class="btn-row" style="margin-bottom:10px">
           <button class="btn btn-outline btn-sm" onclick="MA.loadAudit()">加载审计</button>
+          <button class="btn btn-outline btn-sm" onclick="MA.verifyAudit()">校验审计哈希链</button>
           ${has('audit:export') ? '<button class="btn btn-outline btn-sm" onclick="MA.exportAudit()">导出审计（留痕）</button>' : ''}
         </div>
-        <div id="audit-result" class="muted small">点击“加载审计”查看（需审计权限；导出仅管理员/平台审批人）。</div>
+        <div id="audit-result" class="muted small">审计采用 SHA-256 哈希链（含 prev_hash），可检测篡改/断链；生产仍建议 WORM 与异地备份。点击“加载审计”查看。</div>
       </div>`;
   } catch (error) {
     view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
@@ -1779,6 +1780,15 @@ async function loadAudit() {
       ${data.items.map((row) => `<tr><td class="small muted">${esc(row.created_at)}</td><td class="mono small">${esc(row.actor)}</td>
         <td>${esc(row.action)}</td><td class="small">${esc(row.target_type)} ${esc(row.target_id)}</td><td class="small muted">${esc(row.detail)}</td></tr>`).join('')}
     </tbody></table></div>`;
+  } catch (error) { $('#audit-result').innerHTML = `<div class="alert red">${esc(error.message)}</div>`; }
+}
+
+async function verifyAudit() {
+  try {
+    const data = await api('/api/audit/verify');
+    $('#audit-result').innerHTML = data.ok
+      ? `<div class="alert ok">哈希链校验通过：${data.checked}/${data.total} 条${data.legacy_unhashed ? `（另有 ${data.legacy_unhashed} 条升级前未哈希）` : ''}</div>`
+      : `<div class="alert red">哈希链校验失败：第 ${data.broken_at} 条，${esc(data.reason)}</div>`;
   } catch (error) { $('#audit-result').innerHTML = `<div class="alert red">${esc(error.message)}</div>`; }
 }
 
@@ -1893,7 +1903,7 @@ window.MA = {
   searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, toggleSourceForm, syncKnowledgeSource, testPolicy, runEval, showEvalRun,
   generateReportDraft, openReport, saveReport, signReport, writebackReport, queryIntegration, runDify,
   notifyTestChannel, notifyAlerts,
-  assignBadcase, closeBadcase, loadAudit, exportAudit,
+  assignBadcase, closeBadcase, loadAudit, exportAudit, verifyAudit,
   bindPatient, revokePatient, submitFollowup,
 };
 

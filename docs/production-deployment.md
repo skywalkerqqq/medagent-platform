@@ -12,6 +12,7 @@
 | Docker Compose | ✅ | `deploy/docker-compose.yml`：app + 可选 TLS 代理 |
 | 健康检查 | ✅ | `/healthz` 存活、`/readyz` 数据库就绪 |
 | 安全响应头 | ✅ | nosniff / DENY / no-referrer / X-Request-Id / X-Process-Time |
+| 审计哈希链 | ✅ | `/api/audit/verify`；WORM/异地仍待等保阶段 |
 | 备份脚本 | ✅ | `deploy/backup.ps1`、`deploy/backup.sh`（SQLite online backup + SHA256） |
 | TLS 反代模板 | 🟡 | `deploy/nginx`，需院方证书；未启用 HTTP/2 优化与 WAF |
 | PostgreSQL | ⬜ | 仅 compose profile 占位；**当前应用未接线 PG**，下一阶段迁移 |

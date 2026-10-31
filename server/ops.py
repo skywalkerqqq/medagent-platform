@@ -1,6 +1,7 @@
 """运营指标、BadCase 与审计。"""
 from __future__ import annotations
 
+import hashlib
 import re
 from datetime import timedelta
 
@@ -221,6 +222,36 @@ def list_audit(ctx):
     return 200, {"items": [dict(row) for row in rows]}
 
 
+def verify_audit(ctx):
+    common.require(ctx["user"], "audit:read")
+    rows = ctx["conn"].execute("SELECT * FROM audit_logs ORDER BY id").fetchall()
+    prev = common.AUDIT_GENESIS
+    legacy = 0
+    for row in rows:
+        stored_hash = row["hash"] or ""
+        stored_prev = row["prev_hash"] or ""
+        if not stored_hash:
+            legacy += 1
+            prev = stored_hash
+            continue
+        if stored_prev != prev:
+            return 200, {"ok": False, "total": len(rows), "broken_at": row["id"],
+                         "reason": "prev_hash 不连续", "legacy_unhashed": legacy}
+        expected = hashlib.sha256(
+            common.audit_payload(stored_prev, row["actor"] or "", row["action"] or "",
+                                 row["target_type"] or "", row["target_id"] or "",
+                                 row["detail"] or "", row["created_at"] or "").encode("utf-8")
+        ).hexdigest()
+        if expected != stored_hash:
+            return 200, {"ok": False, "total": len(rows), "broken_at": row["id"],
+                         "reason": "内容哈希不匹配", "legacy_unhashed": legacy}
+        prev = stored_hash
+    return 200, {"ok": True, "total": len(rows), "checked": len(rows) - legacy,
+                 "legacy_unhashed": legacy,
+                 "note": ("哈希链连续（SHA-256，含 prev_hash）" if not legacy
+                          else "存在升级前未哈希的历史审计行，需回填/迁移后复核")}
+
+
 def export_audit(ctx):
     common.require(ctx["user"], "audit:export", "仅管理员/平台审批人可导出审计")
     rows = ctx["conn"].execute("SELECT * FROM audit_logs ORDER BY id").fetchall()
@@ -245,6 +276,7 @@ ROUTES = [
     ("POST", re.compile(r"^/api/badcases$"), create_badcase),
     ("POST", re.compile(r"^/api/badcases/(?P<id>\d+)$"), update_badcase),
     ("GET", re.compile(r"^/api/audit$"), list_audit),
+    ("GET", re.compile(r"^/api/audit/verify$"), verify_audit),
     ("GET", re.compile(r"^/api/audit/export$"), export_audit),
     ("GET", re.compile(r"^/api/handoffs$"), list_handoffs),
 ]
