@@ -1,0 +1,12 @@
+{
+  "pages": ["pages/index/index", "pages/bind/bind", "pages/reports/reports", "pages/followups/followups"],
+  "window": {
+    "navigationBarTitleText": "MediAgent 患者服务",
+    "navigationBarBackgroundColor": "#0E7490",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F3F7FA"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json",
+  "lazyCodeLoading": "requiredComponents"
+}

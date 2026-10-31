@@ -28,7 +28,13 @@ $testCode = $LASTEXITCODE
 Write-Host "=== 前端 JS 语法 ===" -ForegroundColor Cyan
 if ($node) {
     & $node --check web/app.js
-    $jsCode = $LASTEXITCODE
+    $miniprogramBad = 0
+    Get-ChildItem -Recurse miniprogram -Filter *.js | ForEach-Object {
+        & $node --check $_.FullName 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { $miniprogramBad++ }
+    }
+    if ($miniprogramBad -gt 0) { Write-Host "小程序 JS 语法失败: $miniprogramBad" -ForegroundColor Red }
+    $jsCode = if ($miniprogramBad -gt 0 -or $LASTEXITCODE -ne 0) { 1 } else { 0 }
 } else {
     Write-Host "未找到 node，跳过 JS 语法检查" -ForegroundColor Yellow
     $jsCode = 0
@@ -44,4 +50,5 @@ if ($testCode -eq 0 -and $jsCode -eq 0) {
     Pop-Location
     exit 1
 }
+
 

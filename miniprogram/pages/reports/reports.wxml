@@ -1,0 +1,15 @@
+<view class="card">
+  <view class="title">我的报告</view>
+  <view class="sub">仅展示院方批准向患者开放的报告；如需完整内容或解读，请咨询医生。</view>
+  <view wx:if="{{loading}}" class="sub" style="margin-top:20rpx">加载中…</view>
+  <view wx:elif="{{error}}" class="alert err">{{error}}</view>
+  <view wx:elif="{{items.length === 0}}" class="sub" style="margin-top:20rpx">暂无授权报告。</view>
+  <view wx:else>
+    <view class="item" wx:for="{{items}}" wx:key="id">
+      <view class="item-title">{{item.exam_type}} <text class="pill">已批准</text></view>
+      <view class="item-sub">{{item.summary}}</view>
+      <view class="item-sub">{{item.reported_at}}</view>
+    </view>
+  </view>
+  <view class="alert">报告仅作信息展示，不构成诊断；如有异常请及时就医。</view>
+</view>

@@ -1,0 +1,36 @@
+page {
+  background: #f3f7fa;
+  color: #102a3a;
+  font-size: 28rpx;
+  font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+view, text, input, button { box-sizing: border-box; }
+button::after { border: none; }
+.card {
+  background: #fff; border-radius: 24rpx; padding: 32rpx;
+  margin: 24rpx; box-shadow: 0 6rpx 24rpx rgba(16, 42, 58, 0.06);
+}
+.title { font-size: 38rpx; font-weight: 700; margin-bottom: 12rpx; }
+.sub { color: #64798a; font-size: 24rpx; line-height: 1.7; }
+.btn {
+  height: 88rpx; border-radius: 18rpx; background: #0e7490; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 30rpx;
+  margin-top: 24rpx;
+}
+.btn.light { background: #e6f6fa; color: #0e7490; }
+.field { margin-top: 20rpx; }
+.field text { display: block; color: #64798a; font-size: 24rpx; margin-bottom: 8rpx; }
+.field input, .field textarea {
+  width: 100%; min-height: 80rpx; padding: 18rpx; border: 1rpx solid #dbe5ec;
+  border-radius: 14rpx; background: #fbfdfe;
+}
+.pill { display: inline-block; padding: 4rpx 16rpx; border-radius: 999rpx; background: #e6f6fa; color: #0e7490; font-size: 22rpx; }
+.item { padding: 20rpx 0; border-bottom: 1rpx solid #eef3f7; }
+.item:last-child { border-bottom: 0; }
+.item-title { font-weight: 600; margin-bottom: 6rpx; }
+.item-sub { color: #64798a; font-size: 23rpx; line-height: 1.6; }
+.alert { background: #fff7e8; color: #b45309; border-radius: 14rpx; padding: 18rpx; font-size: 24rpx; line-height: 1.6; margin-top: 16rpx; }
+.alert.ok { background: #eaf7ef; color: #15803d; }
+.alert.err { background: #feeceb; color: #b42318; }
+.nav-row { display: flex; gap: 16rpx; margin-top: 24rpx; }
+.nav-row .btn { flex: 1; margin-top: 0; }

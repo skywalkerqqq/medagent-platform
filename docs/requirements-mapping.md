@@ -99,7 +99,18 @@
 | 调用记录 | ✅ | `/api/integrations/calls`；数据集成页可查 |
 | 真实对接 | ⬜ | HIS/EMR/PACS 接口、字段映射、授权与脱敏须院方确认 |
 
-## 八、验收用例覆盖
+## 八、扩展能力：患者小程序（POC）
+
+| 页面 | 能力 | 接口 |
+|---|---|---|
+| 首页 | 微信登录、绑定状态 | `/api/auth/wx-login`、`/api/patient/me` |
+| 绑定 | 患者标识+核验码、授权 | `/api/patient/bind` |
+| 报告 | 仅批准可见 | `/api/patient/reports` |
+| 随访 | 任务/提交/危险信号转人工 | `/api/patient/followups` |
+
+工程位置：`medagent-platform/miniprogram/`；生产需正式 AppID/备案域名/隐私指引/订阅消息。
+
+## 九、验收用例覆盖
 
 | 验收用例（v1.1 §4） | 覆盖测试 |
 |---|---|

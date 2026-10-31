@@ -1,0 +1,14 @@
+{
+  "description": "MediAgent 患者服务小程序（POC）",
+  "compileType": "miniprogram",
+  "libVersion": "3.5.7",
+  "appid": "touristappid",
+  "projectname": "medagent-patient",
+  "miniprogramRoot": "./",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "minified": true
+  }
+}

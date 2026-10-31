@@ -1,0 +1,23 @@
+<view class="card">
+  <view class="title">MediAgent 患者服务</view>
+  <view class="sub">绑定后查看授权范围内的报告、随访任务；患者端不提供诊断/处方建议。</view>
+  <view wx:if="{{loading}}" class="sub" style="margin-top:20rpx">加载中…</view>
+  <view wx:elif="{{error}}" class="alert err">{{error}}</view>
+  <view wx:elif="{{bound}}">
+    <view class="item" style="margin-top:20rpx">
+      <view class="item-title">已绑定 {{nameMask}}</view>
+      <view class="item-sub">授权：{{consent}} · 报告 {{reports}} 份 · 随访 {{tasks}} 项</view>
+    </view>
+    <view class="nav-row">
+      <button class="btn" bindtap="goReports">我的报告</button>
+      <button class="btn light" bindtap="goFollowups">随访任务</button>
+    </view>
+  </view>
+  <view wx:else>
+    <view class="alert">尚未绑定患者身份：请先完成身份核验与授权。</view>
+    <button class="btn" bindtap="goBind">绑定患者身份</button>
+  </view>
+</view>
+<view class="card">
+  <view class="sub">安全说明：微信登录仅用于建立会话；患者数据须完成绑定与授权后访问；患者端不输出诊断、处方或调整用药建议。</view>
+</view>

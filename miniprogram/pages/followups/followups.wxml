@@ -1,0 +1,21 @@
+<view class="card">
+  <view class="title">随访任务</view>
+  <view class="sub">按院方审核的随访计划填写；出现危险信号会生成人工待办并提示就医。</view>
+  <view wx:if="{{loading}}" class="sub" style="margin-top:20rpx">加载中…</view>
+  <view wx:elif="{{error}}" class="alert err">{{error}}</view>
+  <view wx:elif="{{items.length === 0}}" class="sub" style="margin-top:20rpx">暂无随访任务。</view>
+  <block wx:else>
+    <view class="item" wx:for="{{items}}" wx:key="id">
+      <view class="item-title">{{item.node}}</view>
+      <view class="item-sub">截止 {{item.due_at}} · 状态 {{item.status}}</view>
+    </view>
+    <view class="field">
+      <text>随访问卷（JSON 或自然语言）</text>
+      <textarea value="{{answer}}" bindinput="onInput" auto-height />
+    </view>
+    <button class="btn" loading="{{submitting}}" bindtap="submit">提交随访</button>
+    <view wx:if="{{result}}" class="alert {{result.risk_flag ? 'err' : 'ok'}}">{{result.message}}</view>
+    <view wx:if="{{result && result.disclaimer}}" class="sub" style="margin-top:8rpx">{{result.disclaimer}}</view>
+  </block>
+  <view class="alert">随访不等于诊疗；如症状加重请立即就医或拨打急救电话。</view>
+</view>

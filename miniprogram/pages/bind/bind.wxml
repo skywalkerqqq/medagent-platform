@@ -1,0 +1,15 @@
+<view class="card">
+  <view class="title">绑定患者身份</view>
+  <view class="sub">POC 演示：患者标识 P0001 / P0002，核验码 654321。真实环境须院方身份核验与授权流程。</view>
+  <view class="field">
+    <text>患者标识</text>
+    <input value="{{patientRef}}" bindinput="onInputRef" placeholder="P0001" />
+  </view>
+  <view class="field">
+    <text>身份核验码</text>
+    <input value="{{verifyCode}}" bindinput="onInputCode" placeholder="654321" />
+  </view>
+  <view wx:if="{{error}}" class="alert err">{{error}}</view>
+  <button class="btn" loading="{{loading}}" bindtap="submit">绑定并授权</button>
+  <view class="alert">患者数据仅用于授权范围内的报告/随访服务；临床记忆与医生端功能不开放给患者。</view>
+</view>

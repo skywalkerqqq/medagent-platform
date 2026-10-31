@@ -1,0 +1,4 @@
+{
+  "desc": "MediAgent 患者服务",
+  "rules": [{ "action": "allow", "page": "*" }]
+}
