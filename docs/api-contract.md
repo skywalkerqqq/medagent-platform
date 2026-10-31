@@ -107,6 +107,15 @@
 | PUT | /api/reports/{id} | report:write | 编辑所见/印象/建议（仅 draft） |
 | POST | /api/reports/{id}/sign | report:write | 签名；记录编辑人/时间/修改率，已签名不可改 |
 
+## 7.8 数据集成（HIS/EMR/PACS mock）
+
+| 方法 | 路径 | 权限 | 说明 |
+|---|---|---|---|
+| GET | /api/integrations/status | 登录 | HIS/EMR/PACS mock 状态 |
+| GET | /api/integrations/patient/{ref} | report:read | 患者上下文聚合（P0001/P0002，合成脱敏） |
+| POST | /api/integrations/report-writeback | report:write | `{report_id}`；仅已签名；幂等，返回 external_id |
+| GET | /api/integrations/calls | report:read | 集成调用记录 |
+
 ## 8. 错误码
 
 | code | HTTP | 含义 |

@@ -22,6 +22,9 @@ const NAV = [
     { key: 'models', label: '模型网关', icon: 'cpu', path: '/models' },
     { key: 'eval', label: '评测门禁', icon: 'target', path: '/eval' },
   ] },
+  { group: '集成', items: [
+    { key: 'integrations', label: '数据集成（HIS/EMR/PACS）', icon: 'database', path: '/integrations' },
+  ] },
   { group: '治理与运营', items: [
     { key: 'ops', label: '运营 / BadCase', icon: 'chart', path: '/ops' },
     { key: 'patient', label: '患者端演示', icon: 'user', path: '/patient' },
@@ -44,6 +47,7 @@ const ICON_PATHS = {
   refresh: '<path d="M20 11A8 8 0 1 0 18.4 16"/><path d="M20 4v7h-7"/>',
   brain: '<path d="M9.5 3a3 3 0 0 0-3 3v1.2A3 3 0 0 0 4 10v1a3 3 0 0 0 1.5 2.6V15a3 3 0 0 0 4.5 2.6V3z"/><path d="M14.5 3a3 3 0 0 1 3 3v1.2A3 3 0 0 1 20 10v1a3 3 0 0 1-1.5 2.6V15a3 3 0 0 1-4.5 2.6V3z"/>',
   file: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6z"/><path d="M14 3v6h6"/><path d="M8 13h8M8 17h6"/>',
+  database: '<ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
 };
 
 function icon(name, size = 18) {
@@ -59,6 +63,7 @@ const TITLES = {
   '/reports': ['报告编辑', '工作台 / 报告编辑'],
   '/knowledge': ['知识中心', '能力 / 知识中心'],
   '/memory': ['记忆', '能力 / 长期记忆'],
+  '/integrations': ['数据集成', '集成 / HIS · EMR · PACS'],
   '/models': ['模型网关', '能力 / 模型网关'],
   '/eval': ['评测门禁', '能力 / 评测门禁'],
   '/ops': ['运营 / BadCase', '治理 / 运营'],
@@ -199,6 +204,7 @@ function route() {
     '/reports': renderReports,
     '/knowledge': renderKnowledge,
     '/memory': renderMemory,
+    '/integrations': renderIntegrations,
     '/models': renderModels,
     '/eval': renderEval,
     '/ops': renderOps,
@@ -888,6 +894,14 @@ async function renderReports(view) {
     const canWrite = has('report:write');
     let selected = reportData.items.find((item) => item.id === reportSelected) || reportData.items[0] || null;
     if (selected) reportSelected = selected.id;
+    let patientContext = null;
+    if (selected && selected.patient_ref) {
+      try {
+        patientContext = await api(`/api/integrations/patient/${encodeURIComponent(selected.patient_ref)}`);
+      } catch (error) {
+        patientContext = null;
+      }
+    }
     view.innerHTML = `
       <div class="grid grid-2">
         <div class="card">
@@ -915,6 +929,11 @@ async function renderReports(view) {
                 <span class="small muted">${esc(selected.exam_type)} · 患者 ${esc(selected.patient_ref || '—')}</span></div>
               ${selected.status === 'signed' ? `<span class="small muted">修改率 ${selected.edit_rate !== null ? Math.round(selected.edit_rate * 100) + '%' : '—'} · 签名人 ${esc(selected.editor_id || '')}</span>` : ''}
             </div>
+            ${patientContext ? `<div class="alert teal small">
+              患者上下文（HIS/EMR/PACS mock）：${esc(patientContext.sex)} · ${patientContext.age} 岁 ·
+              过敏：${esc((patientContext.allergies || []).join('、') || '无记录')} ·
+              就诊 ${patientContext.encounters.length} 次 · 影像 ${patientContext.studies.length} 项
+            </div>` : (selected.patient_ref ? '<div class="alert amber small">未获取到患者上下文（mock 仅 P0001/P0002）</div>' : '')}
             <label class="field"><span>检查所见</span><textarea id="rpt-findings" ${selected.status === 'signed' ? 'disabled' : ''}>${esc(selected.findings)}</textarea></label>
             <label class="field"><span>印象</span><textarea id="rpt-impression" ${selected.status === 'signed' ? 'disabled' : ''}>${esc(selected.impression)}</textarea></label>
             <label class="field"><span>建议</span><textarea id="rpt-recommendation" ${selected.status === 'signed' ? 'disabled' : ''}>${esc(selected.recommendation)}</textarea></label>
@@ -922,7 +941,10 @@ async function renderReports(view) {
             ${selected.status === 'draft' && canWrite ? `<div class="btn-row">
               <button class="btn btn-outline" onclick="MA.saveReport()">保存修改</button>
               <button class="btn btn-primary" onclick="MA.signReport()">签名生效</button>
-            </div>` : '<div class="alert green">已签名：报告不可再修改，修改率已记录。</div>'}
+            </div>` : `<div class="alert green">已签名：报告不可再修改，修改率已记录。</div>
+            ${selected.written_back_at
+              ? `<div class="alert teal small">已回写 HIS：external_id=${esc(selected.external_id)} · ${esc(selected.written_back_at)}</div>`
+              : (canWrite ? '<button class="btn btn-outline btn-sm" onclick="MA.writebackReport()">回写 HIS（mock）</button>' : '')}`}
           ` : '<div class="muted small">左侧生成一份报告草稿，或从下方列表打开。</div>'}
         </div>
       </div>
@@ -989,6 +1011,76 @@ async function signReport() {
     toast(report.edit_rate !== null ? `签名完成，修改率 ${Math.round(report.edit_rate * 100)}%` : '签名完成');
     route();
   } catch (error) { toast(error.message, 'error'); }
+}
+
+async function writebackReport() {
+  if (!reportSelected) return;
+  try {
+    const result = await api('/api/integrations/report-writeback', { method: 'POST', body: { report_id: reportSelected } });
+    toast(`已回写 HIS：${result.external_id}${result.idempotent ? '（幂等）' : ''}`);
+    route();
+  } catch (error) { toast(error.message, 'error'); }
+}
+
+/* ---------------------------------------------------------------- 数据集成 */
+async function renderIntegrations(view) {
+  view.innerHTML = '<div class="card">加载中…</div>';
+  try {
+    const [status, calls] = await Promise.all([
+      api('/api/integrations/status'), api('/api/integrations/calls').catch(() => ({ items: [] })),
+    ]);
+    view.innerHTML = `
+      <div class="grid grid-3">
+        ${status.items.map((item) => `<div class="card">
+          <div class="list-title">${esc(item.name.toUpperCase())} <span class="pill ${item.configured ? 'green' : 'gray'}">${item.mode}</span></div>
+          <div class="small muted" style="margin-top:6px">${esc(item.detail)}</div>
+        </div>`).join('')}
+      </div>
+      <div class="alert amber" style="margin-top:16px">${esc(status.note)}</div>
+      <div class="grid grid-2" style="margin-top:20px">
+        <div class="card">
+          <h3 class="section-title">患者上下文查询（HIS/EMR/PACS mock）</h3>
+          <div class="btn-row"><input id="integration-patient" value="P0001" placeholder="患者标识 P0001 / P0002" />
+            <button class="btn btn-primary" onclick="MA.queryIntegration()">查询</button></div>
+          <div id="integration-patient-result" style="margin-top:14px"></div>
+        </div>
+        <div class="card">
+          <h3 class="section-title">集成调用记录</h3>
+          <div class="table-wrap"><table><thead><tr><th>时间</th><th>集成</th><th>动作</th><th>目标</th><th>状态</th><th>external_id</th></tr></thead><tbody>
+            ${calls.items.map((call) => `<tr><td class="small muted">${esc(call.created_at)}</td><td>${esc(call.integration)}</td>
+              <td>${esc(call.action)}</td><td class="small">${esc(call.target)}</td><td>${statusPill(call.status)}</td>
+              <td class="mono small">${esc(call.external_id || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">暂无调用（在报告编辑器签名后“回写 HIS”会生成）</td></tr>'}
+          </tbody></table></div>
+        </div>
+      </div>`;
+    $('#integration-patient').addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') queryIntegration();
+    });
+  } catch (error) {
+    view.innerHTML = `<div class="card alert red">${esc(error.message)}</div>`;
+  }
+}
+
+async function queryIntegration() {
+  const ref = ($('#integration-patient')?.value || '').trim().toUpperCase();
+  const box = $('#integration-patient-result');
+  if (!ref) return;
+  try {
+    const data = await api(`/api/integrations/patient/${encodeURIComponent(ref)}`);
+    box.innerHTML = `
+      <div class="alert teal">${esc(data.name_mask)} · ${esc(data.sex)} · ${data.age} 岁 · 过敏：${esc((data.allergies || []).join('、') || '无记录')}</div>
+      <div class="small"><b>就诊记录</b></div>
+      <div class="table-wrap" style="margin:8px 0 14px"><table><thead><tr><th>时间</th><th>科室</th><th>医生</th><th>诊断/状态</th></tr></thead><tbody>
+        ${data.encounters.map((item) => `<tr><td>${esc(item.date)}</td><td>${esc(item.department)}</td><td>${esc(item.doctor)}</td><td>${esc(item.diagnosis)} · ${esc(item.status)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="small"><b>影像检查</b></div>
+      <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>检查号</th><th>日期</th><th>模态</th><th>部位</th><th>报告</th></tr></thead><tbody>
+        ${data.studies.map((item) => `<tr><td class="mono small">${esc(item.study_id)}</td><td>${esc(item.date)}</td><td>${esc(item.modality)}</td><td>${esc(item.body_part)}</td><td>${esc(item.report_status)}</td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="small muted" style="margin-top:8px">来源：${esc((data.sources || []).join(' / '))} · 合成脱敏数据</div>`;
+  } catch (error) {
+    box.innerHTML = `<div class="alert red">${esc(error.message)}</div>`;
+  }
 }
 
 /* ---------------------------------------------------------------- 知识中心 */
@@ -1625,7 +1717,7 @@ window.MA = {
   pgCloseSession, searchMemory,
   memoryToggle, memoryDelete,
   searchKnowledge, reviewDoc, reviewFaq, toggleFaqForm, testPolicy, runEval, showEvalRun,
-  generateReportDraft, openReport, saveReport, signReport,
+  generateReportDraft, openReport, saveReport, signReport, writebackReport, queryIntegration,
   assignBadcase, closeBadcase, loadAudit, exportAudit,
   bindPatient, revokePatient, submitFollowup,
 };

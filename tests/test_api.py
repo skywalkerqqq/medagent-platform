@@ -508,10 +508,45 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(run["threshold"], 0.75)
         self.assertTrue(run["passed"], run)
 
-    def test_25_server_stable(self):
-        status, payload = request("GET", "/api/health")
+    def test_27_his_mock_integration(self):
+        doctor = self.token("u_doctor")
+        status, health = request("GET", "/api/integrations/status", token=doctor)
         self.assertEqual(status, 200)
-        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(health["mode"], "mock")
+        self.assertEqual({item["name"] for item in health["items"]}, {"his", "emr", "pacs"})
+        status, patient = request("GET", "/api/integrations/patient/P0001", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertEqual(patient["patient_ref"], "P0001")
+        self.assertIn("青霉素", patient["allergies"])
+        self.assertGreaterEqual(len(patient["encounters"]), 1)
+        self.assertGreaterEqual(len(patient["studies"]), 1)
+        status, _ = request("GET", "/api/integrations/patient/P0001", token=self.token("u_patient"))
+        self.assertEqual(status, 403)
+        # 生成并签名报告后回写 HIS（幂等）
+        status, report = request("POST", "/api/reports/draft", {
+            "app_id": 3, "exam_type": "胸部 CT", "patient_ref": "P0001",
+            "findings": "右肺上叶结节 8mm，边界清楚",
+        }, token=doctor)
+        self.assertEqual(status, 201, report)
+        report_id = report["id"]
+        status, _ = request("POST", "/api/integrations/report-writeback", {"report_id": report_id}, token=doctor)
+        self.assertEqual(status, 409)  # 未签名不可回写
+        status, _ = request("POST", f"/api/reports/{report_id}/sign", token=doctor)
+        self.assertEqual(status, 200)
+        status, first = request("POST", "/api/integrations/report-writeback", {"report_id": report_id}, token=doctor)
+        self.assertEqual(status, 200, first)
+        self.assertFalse(first["idempotent"])
+        self.assertTrue(first["external_id"].startswith("HIS-RPT-"))
+        status, second = request("POST", "/api/integrations/report-writeback", {"report_id": report_id}, token=doctor)
+        self.assertEqual(status, 200)
+        self.assertTrue(second["idempotent"])
+        self.assertEqual(second["external_id"], first["external_id"])
+        status, calls = request("GET", "/api/integrations/calls", token=doctor)
+        self.assertEqual(status, 200)
+        self.assertTrue(any(call["external_id"] == first["external_id"] for call in calls["items"]))
+        admin = self.token("u_admin")
+        status, audit = request("GET", "/api/audit?limit=100", token=admin)
+        self.assertIn("回写 HIS", {item["action"] for item in audit["items"]})
 
     def test_26_report_editor(self):
         doctor = self.token("u_doctor")
@@ -588,6 +623,11 @@ class MediAgentV11Test(unittest.TestCase):
         status, hard = request("DELETE", f"/api/memories/{memory_id}?hard=1", token=admin)
         self.assertEqual(status, 200)
         self.assertTrue(hard["hard"])
+
+    def test_28_server_stable(self):
+        status, payload = request("GET", "/api/health")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["status"], "ok")
 
 
 if __name__ == "__main__":
