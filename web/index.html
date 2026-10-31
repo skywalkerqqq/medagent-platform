@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MediAgent · 医疗 AI 中台 v1.1</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <div id="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">M</div>
+        <div>
+          <div class="brand-name">MediAgent</div>
+          <div class="brand-sub">医疗 AI 中台 v1.1</div>
+        </div>
+      </div>
+      <nav id="nav"></nav>
+      <div class="sidebar-foot">
+        <div id="user-mini" class="user-mini">未登录</div>
+        <button id="logout" class="link-btn" type="button">退出登录</button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <div id="page-title" class="page-title">登录</div>
+          <div id="page-crumb" class="crumb">MediAgent / 登录</div>
+        </div>
+        <div id="top-actions" class="top-actions"></div>
+      </header>
+      <section id="view" class="view"></section>
+    </main>
+  </div>
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
