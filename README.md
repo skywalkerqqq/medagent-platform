@@ -33,7 +33,8 @@ python server/app.py --port 8090 --db data/medagent.db --reset
 测试：
 
 ```powershell
-python tests/test_api.py     # 22 项接口验收测试
+python tests/test_api.py       # 22 项接口验收测试
+python tests/test_llm_live.py  # 3 项真实模型上游测试（fake OpenAI）
 ```
 
 或 `scripts/check.ps1`（测试 + 前端 JS 语法检查）。

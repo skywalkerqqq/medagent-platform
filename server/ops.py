@@ -88,6 +88,36 @@ def dashboard(ctx):
     }
 
 
+def alerts(ctx):
+    common.require(ctx["user"], "metrics:read")
+    snapshot = metrics_snapshot(ctx["conn"])["values"]
+    items = []
+    if snapshot["safety_high"]:
+        items.append({"severity": "high", "title": "存在高风险安全事件",
+                      "detail": f"{snapshot['safety_high']} 条高风险事件待处置（阻断发布）",
+                      "action": "前往安全事件/发布检查处置"})
+    if snapshot["badcase_open"] > 2:
+        items.append({"severity": "medium", "title": "BadCase 积压",
+                      "detail": f"{snapshot['badcase_open']} 条未闭环", "action": "运营台分派/关闭"})
+    if snapshot["eval_pass_rate"] is not None and snapshot["eval_pass_rate"] < 0.7:
+        items.append({"severity": "medium", "title": "评测通过率偏低",
+                      "detail": f"当前 {round(snapshot['eval_pass_rate'] * 100)}%，低于 70%",
+                      "action": "检查模板/知识/评测集"})
+    if snapshot["degrade_rate"] and snapshot["degrade_rate"] > 0.2:
+        items.append({"severity": "low", "title": "模型降级率偏高",
+                      "detail": f"降级率 {round(snapshot['degrade_rate'] * 100)}%",
+                      "action": "检查主模型可用性/策略链"})
+    failures = ctx["conn"].execute(
+        "SELECT COUNT(*) FROM model_calls WHERE error_code != ''").fetchone()[0]
+    if failures:
+        items.append({"severity": "medium", "title": "模型调用失败",
+                      "detail": f"{failures} 次失败（含真实上游失败）", "action": "查看模型调用记录"})
+    if snapshot["knowledge_pending"] > 5:
+        items.append({"severity": "low", "title": "知识待审核积压",
+                      "detail": f"{snapshot['knowledge_pending']} 条待审核", "action": "知识运营处理"})
+    return 200, {"items": items, "generated_at": db.iso()}
+
+
 def list_badcases(ctx):
     common.require(ctx["user"], "metrics:read")
     query = ctx["query"]
@@ -171,6 +201,7 @@ def list_handoffs(ctx):
 
 ROUTES = [
     ("GET", re.compile(r"^/api/ops/metrics$"), metrics),
+    ("GET", re.compile(r"^/api/ops/alerts$"), alerts),
     ("GET", re.compile(r"^/api/dashboard$"), dashboard),
     ("GET", re.compile(r"^/api/badcases$"), list_badcases),
     ("POST", re.compile(r"^/api/badcases$"), create_badcase),

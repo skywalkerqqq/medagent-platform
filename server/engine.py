@@ -100,8 +100,14 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
             memory_step = {"type": "memory", "name": "记忆注入", "status": "empty",
                            "detail": "无相关记忆", "latency_ms": 4}
 
-    gateway = models.call_gateway(conn, app["id"], policy, query)
+    model_prompt = (f"{template['prompt_system']}\n\n用户问题：{query}\n\n已检索资料：\n{answer}")
+    gateway = models.call_gateway(conn, app["id"], policy, model_prompt, generate=True)
     if gateway.get("ok"):
+        if gateway.get("text"):
+            answer = str(gateway["text"]).strip()
+            if citations:
+                refs = "; ".join(str(item.get("citation") or item.get("title") or "") for item in citations)
+                answer = answer.rstrip() + "\n\n参考：" + refs
         versions = {
             "app_version": app["current_version"],
             "template_key": app["template_key"],
@@ -158,6 +164,7 @@ def generate(conn, app, query: str, department: str = "", user_id: str | None = 
     trace.append({
         "type": "model", "name": "模型调用", "status": "degraded" if degraded else ("failed" if not gateway.get("ok") else "succeeded"),
         "detail": (f"{gateway.get('model_key') or '不可用'} · 策略 {policy}"
+                   + (" · 真实上游" if gateway.get("live") else " · 离线模拟")
                    + (" · 降级" if degraded else "")),
         "latency_ms": latency,
     })

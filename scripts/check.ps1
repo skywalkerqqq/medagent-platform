@@ -22,6 +22,7 @@ if (-not $node) {
 
 Write-Host "=== 接口验收测试 ===" -ForegroundColor Cyan
 & $py tests/test_api.py
+& $py tests/test_llm_live.py
 $testCode = $LASTEXITCODE
 
 Write-Host "=== 前端 JS 语法 ===" -ForegroundColor Cyan

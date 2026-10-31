@@ -1293,9 +1293,10 @@ async function showEvalRun(id) {
 async function renderOps(view) {
   view.innerHTML = '<div class="card">加载中…</div>';
   try {
-    const [metrics, badcases, events, handoffs, runs] = await Promise.all([
+    const [metrics, badcases, events, handoffs, runs, alerts] = await Promise.all([
       api('/api/ops/metrics'), api('/api/badcases'), api('/api/safety/events').catch(() => ({ items: [] })),
       api('/api/handoffs').catch(() => ({ items: [] })), api('/api/runs?limit=20').catch(() => ({ items: [] })),
+      api('/api/ops/alerts').catch(() => ({ items: [] })),
     ]);
     const m = metrics.values;
     const canManage = has('badcase:manage');
@@ -1305,6 +1306,14 @@ async function renderOps(view) {
         ${kpi('模型 P95', `${m.p95_latency_ms}ms`, '模型耗时', 'green')}
         ${kpi('未闭环 BadCase', m.badcase_open, '需分派/关闭', 'amber')}
         ${kpi('高风险事件', m.safety_high, '阻断项', 'red')}
+      </div>
+      <div class="card">
+        <h3 class="section-title">运营告警</h3>
+        ${alerts.items.length ? alerts.items.map((item) => `<div class="list-item">
+          <div class="list-main"><div class="list-title">${esc(item.title)} <span class="pill ${item.severity === 'high' ? 'red' : item.severity === 'medium' ? 'amber' : 'gray'}">${esc(item.severity)}</span></div>
+          <div class="list-sub">${esc(item.detail)} · 建议：${esc(item.action)}</div></div></div>`).join('')
+          : '<div class="alert green">当前无告警。</div>'}
+        <div class="small muted" style="margin-top:8px">规则：高风险事件、BadCase 积压、评测通过率、模型降级/失败、知识待审核。</div>
       </div>
       <div class="card">
         <h3 class="section-title">指标定义</h3>

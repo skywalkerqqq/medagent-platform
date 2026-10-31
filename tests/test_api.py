@@ -357,6 +357,10 @@ class MediAgentV11Test(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertGreaterEqual(len(metrics["definitions"]), 8)
         self.assertIn("eval_pass_rate", metrics["values"])
+        status, alerts = request("GET", "/api/ops/alerts", token=admin)
+        self.assertEqual(status, 200)
+        self.assertIsInstance(alerts["items"], list)
+        self.assertTrue(any(item["severity"] in ("high", "medium", "low") for item in alerts["items"]))
 
     def test_14_knowledge_permissions(self):
         creator = self.token("u_creator")

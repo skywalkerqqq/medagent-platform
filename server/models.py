@@ -1,11 +1,68 @@
-"""模型网关：模型注册、策略路由、降级标记与调用记录。"""
+"""模型网关：模型注册、策略路由、降级标记、真实上游（OpenAI 兼容）与调用记录。"""
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
+import time
+import urllib.error
+import urllib.request
 
 import common
 import db
+
+
+def _env(name: str, default: str = "") -> str:
+    return (os.environ.get(name) or default).strip()
+
+
+def live_config() -> dict | None:
+    """LLM_MODE=live 时启用真实上游（OpenAI 兼容）。"""
+    if _env("LLM_MODE").lower() != "live":
+        return None
+    base = _env("LLM_BASE_URL").rstrip("/")
+    key = _env("LLM_API_KEY")
+    model = _env("LLM_MODEL")
+    if not (base and key and model):
+        return None
+    return {"base": base, "key": key, "model": model}
+
+
+def _live_chat(prompt: str, timeout_ms: int = 20000) -> tuple[str, int, int]:
+    """调用 OpenAI 兼容 /chat/completions，返回 (text, tokens_in, tokens_out)。"""
+    cfg = live_config()
+    if not cfg:
+        raise RuntimeError("live_not_configured")
+    url = cfg["base"] + ("/chat/completions" if cfg["base"].endswith("/v1") else "/v1/chat/completions")
+    payload = {
+        "model": cfg["model"],
+        "temperature": 0.1,
+        "messages": [
+            {"role": "system", "content": "你是医疗 AI 辅助工具。只依据提供的资料回答，必须保留引用编号，"
+                                          "不给出诊断结论、处方或剂量；无依据时明确说明未找到依据。"},
+            {"role": "user", "content": prompt},
+        ],
+    }
+    request = urllib.request.Request(
+        url, data=json.dumps(payload, ensure_ascii=False).encode("utf-8"), method="POST",
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {cfg['key']}"},
+    )
+    started = time.time()
+    try:
+        with urllib.request.urlopen(request, timeout=max(5, timeout_ms / 1000)) as response:
+            body = json.loads(response.read().decode("utf-8", "replace") or "{}")
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError, ValueError, OSError) as exc:
+        raise RuntimeError(f"live_upstream_error: {exc}") from exc
+    choices = body.get("choices") if isinstance(body, dict) else None
+    if not choices:
+        raise RuntimeError("live_empty_choices")
+    message = choices[0].get("message") or {}
+    text = str(message.get("content") or "").strip()
+    if not text:
+        raise RuntimeError("live_empty_content")
+    usage = body.get("usage") or {}
+    return text, int(usage.get("prompt_tokens") or 0), int(usage.get("completion_tokens") or 0)
 
 
 def list_models(ctx):
@@ -25,8 +82,12 @@ def list_policies(ctx):
     return 200, {"items": items}
 
 
-def call_gateway(conn, app_id, policy_key: str, prompt: str) -> dict:
-    """按策略链选择模型；主模型不可用时降级并显式标记。"""
+def call_gateway(conn, app_id, policy_key: str, prompt: str, generate: bool = False) -> dict:
+    """按策略链选择模型；主模型不可用时降级并显式标记。
+
+    generate=True 且 LLM_MODE=live 时调用真实 OpenAI 兼容上游；失败时返回 ok=False，
+    由调用方回退模板回答并标记降级，不把失败当成功。
+    """
     policy = conn.execute("SELECT * FROM model_policies WHERE key=?", (policy_key,)).fetchone()
     if not policy:
         return {"ok": False, "error_code": "policy_not_found", "degraded": True, "policy": policy_key}
@@ -47,6 +108,37 @@ def call_gateway(conn, app_id, policy_key: str, prompt: str) -> dict:
         )
         conn.commit()
         return {"ok": False, "error_code": "model_unavailable", "degraded": True, "policy": policy_key}
+    cfg = live_config()
+    use_live = bool(generate and cfg and chosen["provider"] == "openai_compatible")
+    if use_live:
+        started = time.time()
+        try:
+            text, tokens_in, tokens_out = _live_chat(prompt, int(chosen["timeout_ms"] or 20000))
+        except RuntimeError as exc:
+            latency = int((time.time() - started) * 1000)
+            conn.execute(
+                "INSERT INTO model_calls(app_id, policy, model_key, degraded, latency_ms, tokens, cost, error_code, created_at) "
+                "VALUES (?,?,?,?,?,?,?,?,?)",
+                (app_id, policy_key, chosen["key"], 1, latency, 0, 0, str(exc)[:180], db.iso()),
+            )
+            conn.commit()
+            return {"ok": False, "error_code": "live_failed", "detail": str(exc)[:200],
+                    "degraded": True, "policy": policy_key, "model_key": chosen["key"],
+                    "live": True, "latency_ms": latency}
+        latency = max(1, int((time.time() - started) * 1000))
+        tokens = tokens_in + tokens_out
+        cost = round(tokens * 0.002 / 1000, 6)
+        conn.execute(
+            "INSERT INTO model_calls(app_id, policy, model_key, degraded, latency_ms, tokens, cost, error_code, created_at) "
+            "VALUES (?,?,?,?,?,?,?,?,?)",
+            (app_id, policy_key, chosen["key"], 1 if degraded else 0, latency, tokens, cost, "", db.iso()),
+        )
+        return {
+            "ok": True, "policy": policy_key, "model_key": chosen["key"],
+            "model_name": chosen["name"], "degraded": degraded,
+            "latency_ms": latency, "tokens": tokens, "cost": cost,
+            "error_code": "", "live": True, "text": text,
+        }
     digest = int(hashlib.md5((prompt or "").encode("utf-8")).hexdigest()[:8], 16)
     latency = 120 + digest % 280
     tokens = max(40, len(prompt or "") // 2 + 60)
@@ -66,6 +158,8 @@ def call_gateway(conn, app_id, policy_key: str, prompt: str) -> dict:
         "tokens": tokens,
         "cost": cost,
         "error_code": "",
+        "live": False,
+        "text": None,
     }
 
 
