@@ -1,0 +1,10 @@
+# 统一行尾，避免 Windows 检出把 CRLF 提交进仓库
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ico binary
+
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.sh  text eol=lf

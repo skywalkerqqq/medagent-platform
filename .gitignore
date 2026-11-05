@@ -1,4 +1,11 @@
-data/
+# 运行时数据（数据库、备份、迁移产物、压测输出）
+data/*.db
+data/*.db-*
+data/backups/
+data/migration/
+data/load-baseline.json
+data/.tmp_*/
+
 __pycache__/
 *.pyc
 *.pyo
@@ -11,4 +18,3 @@ Thumbs.db
 .env
 deploy/nginx/tls/*.crt
 deploy/nginx/tls/*.key
-

@@ -2,22 +2,12 @@
 $ErrorActionPreference = "Continue"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
-$py = $env:DSH_PYTHON
-if (-not $py) {
-    $candidates = @(
-        "C:\Users\fan\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe",
-        (Join-Path $env:USERPROFILE ".dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe")
-    )
-    foreach ($candidate in $candidates) { if (Test-Path $candidate) { $py = $candidate; break } }
-}
+$py = $env:MEDAGENT_PYTHON
 if (-not $py) { $py = "python" }
-$node = $env:DSH_NODE
+$node = $env:MEDAGENT_NODE
 if (-not $node) {
-    $candidates = @(
-        "C:\Users\fan\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe",
-        (Join-Path $env:USERPROFILE ".dsh\dsh-runtimes\dsh-primary-runtime\dependencies\node\bin\node.exe")
-    )
-    foreach ($candidate in $candidates) { if (Test-Path $candidate) { $node = $candidate; break } }
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if ($nodeCmd) { $node = $nodeCmd.Source }
 }
 
 Write-Host "=== 接口验收测试 ===" -ForegroundColor Cyan

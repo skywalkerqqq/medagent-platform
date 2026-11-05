@@ -6,14 +6,7 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Push-Location $root
-$py = $env:DSH_PYTHON
-if (-not $py) {
-    $candidates = @(
-        "C:\Users\fan\.dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe",
-        (Join-Path $env:USERPROFILE ".dsh\dsh-runtimes\dsh-primary-runtime\dependencies\python\python.exe")
-    )
-    foreach ($candidate in $candidates) { if (Test-Path $candidate) { $py = $candidate; break } }
-}
+$py = $env:MEDAGENT_PYTHON
 if (-not $py) { $py = "python" }
 $db = Join-Path $root "data\medagent.db"
 $args = @("server/app.py", "--port", $Port, "--db", $db)

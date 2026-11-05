@@ -26,7 +26,11 @@ class ProductionEdgeTest(unittest.TestCase):
         self.assertIn("/readyz", paths)
 
     def test_security_middleware_configured(self):
-        names = [middleware.cls.__name__ for middleware in self.production_app.app.user_middleware]
+        # `@app.middleware("http")` 注册为 BaseHTTPMiddleware，真实函数在 options["dispatch"]
+        names = []
+        for middleware in self.production_app.app.user_middleware:
+            dispatch = middleware.kwargs.get("dispatch")
+            names.append(getattr(dispatch, "__name__", "") or middleware.cls.__name__)
         self.assertTrue(any("security" in name.lower() for name in names), names)
 
 

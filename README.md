@@ -1,212 +1,63 @@
-# MediAgent · 医疗 AI 中台 v1.1（独立新实现）
+<div align="center">
 
-> 依据 `医疗AI中台-落地执行包-v1.1.md` 第五部分「产品需求基线与补充规范」重建的 **POC 级中台**：
-> 覆盖应用工厂、知识治理、模型网关、评测门禁、双审批发布、患者端（小程序）联动、BadCase 与审计。
->
-> **本工程为全新独立工程，不修改、不复用旧项目目录**（`agent-platform/`、`medical-ai-platform/` 均保持原样）。
+# 🏥 MediAgent
 
----
+**医疗 AI 中台 · POC 基线 v1.1**
 
-## 1. 快速开始
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-50%20passed-brightgreen.svg)](#-测试)
+[![Dependencies](https://img.shields.io/badge/core%20deps-zero-blue.svg)](#-快速开始)
+[![Status](https://img.shields.io/badge/status-POC-orange.svg)](#-poc-边界诚实说明)
+[![Docker](https://img.shields.io/badge/Docker-compose%20ready-2496ED?style=flat&logo=docker&logoColor=white)](deploy/docker-compose.yml)
 
-环境：Python 3.12（仅标准库 + SQLite，零第三方依赖）。
+**中文** | [English](README.en.md)
 
-```powershell
-cd medagent-platform
-python server/app.py --port 8090 --db data/medagent.db --reset
-# 浏览器打开 http://127.0.0.1:8090
-```
+</div>
 
-演示账号（密码均为 `medagent123`）：
+> 把「AI 应用能不能上临床」这件说不清的事，变成一条**可评测、可审批、可回滚、可追溯**的流水线。
+> 应用工厂 → 知识治理 → 模型网关 → 评测门禁 → 双审批发布 → 患者端联动，全程留痕。
 
-| 账号 | 角色 | 用途 |
-|---|---|---|
-| `u_creator` | 业务人员 | 从模板建应用、试跑、提交发布 |
-| `u_dept` | 科室审批人 | 科室级审批（本部门） |
-| `u_platform` | 平台审批人 | 平台审批、发布、回滚、停用 |
-| `u_knowledge` | 知识运营 | 知识导入/审核 |
-| `u_eval` | 评测人员 | 执行评测、看门禁 |
-| `u_doctor` | 医生 | 试跑、临床复核 |
-| `u_patient` | 患者 | 患者端（绑定/报告/随访） |
-| `u_admin` | 平台管理员 | 全量治理、模型开关、审计导出 |
+一个**零第三方依赖**即可跑起来的医疗 AI 中台 POC：Python 标准库 + SQLite 起服务，原生 ES Module 写前端，微信小程序做患者端。
 
-测试：
-
-```powershell
-python tests/test_api.py       # 25 项接口验收测试
-python tests/test_llm_live.py  # 3 项真实模型上游测试（fake OpenAI）
-python tests/test_dify.py      # 4 项 Dify 适配测试（fake Dify）
-python tests/test_notify.py    # 4 项告警通知测试（fake webhook）
-python tests/test_production_import.py  # 生产边缘导入（无 FastAPI 时跳过）
-```
-
-或 `scripts/check.ps1`（测试 + 前端 JS 语法检查）。
+> ⚠️ 这是 POC / 试点准备系统，不是生产或注册产品。真实边界见 [POC 边界](#-poc-边界诚实说明)。
 
 ---
 
-## 2. 功能总览（对应 v1.1 FR）
+## ✨ 核心能力
 
-| 模块 | 已实现 | 对应 |
-|---|---|---|
-| 身份 | 服务端 Token 会话（8h）、登录/退出、角色权限；**拒绝 X-User-Id 作为身份** | FR-001 / §8.1 |
-| 机构/角色 | 用户-角色-科室；页面/API/数据查询权限校验 | FR-002 |
-| 应用工厂 | 3 个模板（知识问答/病历质控/报告初稿）、创建/配置、试跑（输出+引用+免责+版本+降级） | FR-003 |
-| 运行调试（对话式） | 应用选择、对话气泡、引用/版本/免责、执行轨迹（模板→记忆→知识/规则→模型→安全）、👍/👎 反馈→BadCase | FR-003/008/010 |
-| 报告编辑（扩展） | 报告草稿生成（JSON）→ 医生编辑 → 签名 → 修改率/审计；支持缺失字段提示 | PRD v2.0 临床工作台 FR-40 |
-| 成本对账（扩展） | 近 30 天按应用/模型汇总 tokens 与成本，标注 POC 估算口径 | PRD v2.0 运营 FR-55 |
-| 知识来源同步（扩展） | 文件/JSON/URL 来源登记→同步为 pending 知识→审核生效；路径限制 data/ 内；相同标题+来源跳过 | PRD v2.0 知识中枢 |
-| 安全加固（扩展） | 令牌桶限流（429 + Retry-After，`RATE_LIMIT_RPS/BURST`）、安全响应头、HSTS 可选；[压测基线](docs/load-test-baseline.md) | 工业门槛 |
-| PG 运行时兼容层（实验） | `DATABASE_URL` 启用：`?`→`%s`、`lastrowid`→`RETURNING id`、`INSERT OR IGNORE` 转换；**未在真实 PG 验证** | [说明](docs/postgres-runtime-switch.md) |
-| PG 迁移骨架（扩展） | `production/migrate_to_pg.py`：SQLite 全表导出 + PG DDL 生成 + 可选导入/行校验和对账；**运行时仍 SQLite** | 生产化下一阶段 |
-| 审计哈希链（扩展） | 每条审计 SHA-256 链式哈希（prev_hash），`/api/audit/verify` 检测篡改/断链；升级前历史行标 legacy | 等保/审计 |
-| 生产化 Stage 1（扩展） | FastAPI 边缘 + Dockerfile/Compose + `/healthz` `/readyz` + 安全响应头 + 备份脚本 + TLS 反代模板；**存储仍 SQLite**，PG 下一阶段 | 工业落地 |
-| 告警通知（扩展） | 企业微信/钉钉/generic webhook；webhook 只读环境变量；测试发送/当前告警推送；失败不伪造 | PRD v2.0 运营；通知渠道 |
-| 数据集成（扩展） | HIS/EMR/PACS **mock**：患者上下文聚合、签名报告回写 HIS（幂等/外部 ID/审计）、集成调用记录 | PRD v2.0 §10；真实接口待院方 |
-| 患者小程序（扩展） | `miniprogram/`：微信登录→绑定→报告→随访→危险信号转人工；4 个页面 | v1.1 FR-012/013 + PRD 渠道 |
-| Dify 长尾适配（扩展） | Dify 应用登记/chat/workflow blocking 调用；未配置拒绝、上游失败不伪造、调用记录；不修改 Dify 源码 | PRD v2.0 应用工厂模式 B |
-| 记忆（扩展） | 三级范围 × 四类、去重/软删/硬删、**session 会话结束写摘要 / auto 运行后自动写入**、**64 维 bigram 向量检索**、试跑注入轨迹 | AgentHub v1.2 能力重建（非 v1.1 必需） |
-| 运行记录（扩展） | 每次试跑落 runs（应用/用户/输入/降级/记忆写入），运营台可查 | 旧版运行记录能力吸收 |
-| 评测门禁 | 评测集、指标（召回/引用/答案正确/编造/检出）、阈值、未达标阻断发布 | FR-004 |
-| 审批发布 | 科室→平台两级审批；发布版本快照；停用/回滚；发布人/审批人/版本可追溯 | FR-005 |
-| 模型网关 | 模型注册、策略链、超时/降级显式标记、密钥/调用记录；小程序不直连模型 | FR-006 |
-| 知识中心 | 文档导入/审核/版本/生效失效/范围权限 + **FAQ 管理**（审核后参与检索）；引用可核验；过期/待审不检索 | FR-007 / §4.2 |
-| 生成记录 | 每次试跑返回模板/提示词/模型/知识版本快照 | FR-008 |
-| 审计 | 登录/建应用/提交/审批/发布/评测/知识/患者/模型/导出全留痕；导出受权限控制 | FR-009 |
-| BadCase | 登记、分派、关闭（整改结论）、运营指标 | FR-010 |
-| 运营看板 | 指标定义（口径/来源/当前值）、应用状态、安全检查清单 | FR-011 |
-| 患者端 | 微信登录（dev mock/真实 jscode2session）、身份核验绑定、授权/撤回/解绑、报告（仅批准可见）、随访、异常转人工、患者隔离 | FR-012 / FR-013 |
-| 报告查询 | 仅 `approved_for_patient=1`；未授权不可见 | FR-014（受限） |
-| 医疗 AI 安全 | 允许/禁止输出、风险阻断、人工接管提示、模型故障安全、输出不伪造 | §6 |
-| 变更控制 | 版本快照固定模板/提示词/模型/知识/评测/审批；回滚恢复配置 | §6.4 |
-
-### POC 边界（诚实说明）
-
-- 这是 **POC/试点准备** 系统，不是生产/注册产品；AI 输出均为模板/规则+模拟模型生成，非真实临床模型；
-- 未实现：真实 Dify/RAGFlow 部署、真实 HIS/EMR/PACS 接口、TLS/等保、KMS、PostgreSQL/K8s、真实临床验证；
-- 微信登录默认为 **dev mock**；真实微信需配置 `WX_APPID/WX_SECRET`（或 `WX_CODE2SESSION_URL`）；
-- 患者端仅演示报告/随访/绑定，不含真实患者数据；所有数据为合成种子数据。
+| 模块 | 能力 |
+|---|---|
+| 🔐 身份与权限 | 服务端 Token 会话（8h）、角色 × 科室 × 应用归属、审批职责分离；**拒绝 `X-User-Id` 作为身份** |
+| 🏭 应用工厂 | 3 个模板（知识问答 / 病历质控 / 报告初稿）、创建配置、试跑（输出 + 引用 + 免责 + 版本 + 降级） |
+| 💬 运行调试 | 对话式试跑、执行轨迹（模板→记忆→知识/规则→模型→安全）、👍/👎 反馈自动入 BadCase |
+| 📚 知识中心 | 导入 / 审核 / 版本 / 生效失效 / 范围权限 + FAQ；过期与待审不参与检索；引用可核验 |
+| 🔄 知识来源同步 | 文件 / JSON / URL 来源登记 → 增量同步为 pending → 审核后生效；路径限制在 `data/` 内 |
+| 🧠 长期记忆 | 三级范围（user/agent/tenant）× 四类（preference/fact/summary/instruction）、去重、软删硬删、64 维向量检索、session/auto 写入 |
+| 🔌 模型网关 | 模型注册、策略链、超时、显式降级标记、调用记录；上游不可用不伪造结果 |
+| 📊 评测门禁 | 评测集、指标（召回/引用/答案正确/编造/检出）、阈值、未达标 409 阻断发布 |
+| ✅ 双审批发布 | 科室 → 平台两级审批；发布生成不可变版本快照；支持停用与回滚 |
+| 🩺 报告编辑器 | 草稿生成 → 医生编辑 → 签名 → 修改率统计 → 审计；已签名不可改 |
+| 🔗 数据集成 | HIS / EMR / PACS **mock**：患者上下文聚合、签名报告回写（幂等 + 外部 ID + 审计） |
+| 📱 患者小程序 | 微信登录 → 绑定 → 报告（仅批准可见）→ 随访 → 危险信号转人工；患者数据按绑定隔离 |
+| 🚨 医疗 AI 安全 | 禁止输出（诊断/处方/不安全建议）自动阻断 + 安全事件 + 转人工；模型故障降级不伪造 |
+| 🧾 审计哈希链 | 每条审计 SHA-256 链式哈希（prev_hash），`/api/audit/verify` 检测篡改与断链 |
+| 📈 运营看板 | 10 项指标（口径 + 来源 + 当前值）、成本对账、企业微信/钉钉告警通知 |
+| 🐳 生产化 Stage 1 | FastAPI 边缘 + Docker/Compose + `/healthz` `/readyz` + 安全响应头 + 令牌桶限流 + 备份脚本 + TLS 反代模板 |
 
 ---
 
-## 3. 架构与代码结构
-
-```
-浏览器（原生 ES Module SPA）
-        │  JSON / Bearer Token（无 X-User-Id 认证）
-        ▼
-server/app.py（零依赖 HTTP，静态托管 + API 路由 + Token 中间件）
-  ├─ auth.py        登录/会话/权限
-  ├─ templates.py   两个 POC 模板（提示词/配置/阈值）
-  ├─ apps.py        应用工厂、试跑、发布检查、双审批、发布/回滚/停用
-  ├─ knowledge.py   知识导入/审核/版本/生效失效/检索引用
-  ├─ models.py      模型注册、策略链、降级、调用记录
-  ├─ eval_center.py 评测集、指标、门禁、结果
-  ├─ memory.py      长期记忆（三级范围/去重/软删硬删/试跑注入）
-  ├─ engine.py      生成引擎（模板 + 检索 + 安全 + 网关）
-  ├─ safety.py      禁止输出、风险阻断、人工接管
-  ├─ ops.py         指标口径、BadCase、审计
-  ├─ patient.py     患者绑定/授权/报告/随访/转人工
-  ├─ wechat.py      微信登录（真实/ dev mock）
-  └─ seed.py        合成种子数据（用户/知识/应用/评测/患者）
-production/          FastAPI 生产边缘（Stage 1，复用 server/handlers.py）
-deploy/              Dockerfile、compose、TLS 反代、备份脚本、PG 迁移计划
-web/                 index.html + app.css + app.js（无构建）
-miniprogram/         患者服务小程序（WXML/WXSS/JS，导入开发者工具即可）
-tests/test_api.py    24 项验收测试（真实进程 + HTTP）
-docs/                需求映射、接口契约
-screenshots/         真实运行截图
-```
-
-数据：SQLite（`data/medagent.db`），22 张表；种子含 3 个模板、6 条知识 + 4 条 FAQ、3 个应用、3 个评测集、3 条记忆、2 个患者、BadCase/安全事件/模型调用。
-
----
-
-## 4. 关键流程
-
-### 4.1 创建并发布应用（FR-003/004/005）
-
-1. `u_creator` 从模板创建应用（草稿）；
-2. 试跑：输出 + 引用 + 免责 + 版本 + 降级/安全标记；
-3. 提交发布 → 自动检查：模板/知识范围/可用知识/评测门禁/高风险安全事件；
-4. 未通过 → `409 release_blocked` 并返回逐项原因；
-5. 通过 → 科室审批（本部门）→ 平台审批；
-6. 平台通过 → 生成不可变版本快照（模板/提示词/模型/知识/评测/审批/时间），状态 `published`；
-7. 支持停用与回滚；回滚恢复配置且与展示版本一致。
-
-### 4.2 知识维护（§4.2）
-
-导入（来源/版本/生效/失效/范围）→ 待审核（不参与检索）→ 审核通过（参与检索）→ 过期自动退出检索；所有操作审计。
-
-### 4.3 患者端（FR-012/013）
-
-微信登录（dev mock）→ 绑定（患者标识 + 核验码 `654321`）→ 授权报告/随访 → 报告（仅批准）→ 随访提交 → 危险信号（胸痛/呼吸困难/出血等）→ 生成人工待办并提示就医；支持撤回授权/解绑；患者数据按绑定隔离。
-
-### 4.4 模型故障安全（§6.3/§8.3）
-
-策略链（private-llm → mock-fallback）；主模型禁用时自动降级并显式标记；全部不可用时拒绝生成确定性结论、转人工，不把 mock 当真实结果。
-
----
-
-## 5. API 摘要
-
-完整见 [`docs/api-contract.md`](docs/api-contract.md)。
-
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| POST | `/api/auth/login` | 登录（返回 Bearer Token） |
-| POST | `/api/auth/wx-login` | 微信登录（真实/mock） |
-| GET | `/api/templates` | 模板列表 |
-| GET/POST | `/api/apps` | 应用列表/创建 |
-| PUT | `/api/apps/{id}` | 修改草稿配置 |
-| POST | `/api/apps/{id}/trial` | 试跑（输出/引用/版本/轨迹/自动记忆） |
-| POST | `/api/apps/{id}/feedback` | 试跑反馈（无用→BadCase） |
-| POST | `/api/apps/{id}/sessions` | 创建调试会话 |
-| POST | `/api/sessions/{id}/close` | 结束会话（session 模式写摘要） |
-| GET | `/api/runs` | 试跑运行记录 |
-| GET/POST | `/api/reports`、`/api/reports/draft` | 报告草稿列表/生成 |
-| GET | `/api/integrations/status`、`/api/integrations/patient/{ref}` | HIS/EMR/PACS mock 状态与患者上下文 |
-| POST | `/api/integrations/report-writeback` | 签名报告回写 HIS（幂等） |
-| GET/POST | `/api/integrations/dify/apps`、`/api/integrations/dify/status` | Dify 应用登记/状态 |
-| POST | `/api/integrations/dify/apps/{id}/run` | 平台内调用 Dify（chat/workflow） |
-| PUT/POST | `/api/reports/{id}`、`/api/reports/{id}/sign` | 编辑/签名（记录修改率） |
-| GET | `/api/apps/{id}/release-check` | 发布前逐项检查 |
-| POST | `/api/apps/{id}/submit` | 提交发布（进入科室审批） |
-| POST | `/api/apps/{id}/rollback` | 回滚 |
-| POST | `/api/apps/{id}/disable` | 停用 |
-| GET | `/api/approvals` | 待审批列表（按角色） |
-| POST | `/api/approvals/{id}/decide` | 通过/拒绝（科室→平台） |
-| GET/POST | `/api/knowledge` | 知识列表/导入 |
-| GET/POST | `/api/memories` | 记忆列表/新建（user/agent/tenant × 四类） |
-| GET | `/api/memories/search?q=&mode=vector\|bigram` | 64 维向量/关键词检索 |
-| PUT/DELETE | `/api/memories/{id}` | 更新/软删（`?hard=1` 管理员硬删） |
-| POST | `/api/knowledge/{id}/review` | 审核 |
-| GET/POST | `/api/knowledge/sources`、`/api/knowledge/sources/{id}/sync` | 知识来源登记/同步 |
-| GET | `/api/knowledge/search?q=` | 检索（仅生效+审核+范围） |
-| GET | `/api/models` / `/api/model-policies` | 模型/策略 |
-| POST | `/api/model-policies/{key}/test` | 网关测试（含降级） |
-| GET/POST | `/api/eval/datasets` / `/api/eval/run` | 评测集/执行评测 |
-| GET | `/api/ops/metrics` | 指标口径与当前值 |
-| GET | `/api/ops/costs?days=30` | 成本对账（按应用/模型） |
-| GET/POST | `/api/ops/notify/channels` | 通知渠道列表/登记（webhook 环境变量） |
-| POST | `/api/ops/notify/channels/{id}/test`、`/api/ops/alerts/notify` | 测试发送/当前告警推送 |
-| GET/POST | `/api/badcases`、`/api/badcases/{id}` | BadCase |
-| GET | `/api/audit`、`/api/audit/export` | 审计/导出 |
-| GET | `/api/patient/me`、`/api/patient/reports`、`/api/patient/followups` | 患者端 |
-| POST | `/api/patient/bind`、`/api/patient/revoke`、`/api/patient/followups/{id}/submit` | 绑定/撤回/随访提交 |
-
----
-
-## 6. 截图
+## 📸 界面
 
 | 登录 | 总览 / 验收 |
 |---|---|
 | ![登录](screenshots/00-login.png) | ![总览](screenshots/01-dashboard.png) |
 
-| 应用工厂 | 应用详情（门禁+审批） |
+| 应用工厂 | 应用详情（门禁 + 审批） |
 |---|---|
 | ![应用工厂](screenshots/02-app-factory.png) | ![应用详情](screenshots/03-app-detail.png) |
 
-| 运行调试（对话+轨迹） | 模型网关 |
+| 运行调试（对话 + 轨迹） | 模型网关 |
 |---|---|
 | ![运行调试](screenshots/09-playground.png) | ![模型网关](screenshots/05-model-gateway.png) |
 
@@ -214,57 +65,220 @@ screenshots/         真实运行截图
 |---|---|
 | ![运营](screenshots/06-ops.png) | ![知识](screenshots/07-knowledge.png) |
 
-| 长期记忆（三级范围/注入） | 患者端（小程序联动） |
+| 长期记忆（三级范围 / 注入） | 患者端（小程序联动） |
 |---|---|
 | ![记忆](screenshots/10-memory.png) | ![患者端](screenshots/08-patient.png) |
 
-| 报告编辑器（草稿→签名） | 数据集成（HIS/EMR/PACS mock） |
+| 报告编辑器（草稿 → 签名） | 数据集成（HIS/EMR/PACS mock） |
 |---|---|
 | ![报告编辑](screenshots/11-report.png) | ![数据集成](screenshots/12-integrations.png) |
 
 ---
 
-## 7. 小程序联动
+## 🚀 快速开始
 
-本平台已提供小程序所需的患者端与登录 API：
+环境：**Python 3.12+**，核心零第三方依赖。
 
-1. `POST /api/auth/wx-login` `{code}` → 平台 Token（未配置微信时 dev mock）；
-2. `POST /api/patient/bind` `{patient_ref, verify_code}` → 绑定+授权（POC 核验码 654321）；
-3. 报告/随访/撤回等接口（见 API 摘要）。
+```bash
+cd medagent-platform
+python server/app.py --port 8090 --db data/medagent.db --reset
+# 打开 http://127.0.0.1:8090
+```
 
-联调方式：把小程序 `config.js` 的 BASE_URL 指向本服务（真机需 HTTPS 或开发者工具关闭域名校验）；小程序侧只需实现「wx.login → wx-login、绑定页、报告页、随访页」。生产需：正式 AppID/Secret、HTTPS 备案域名、隐私指引、订阅消息模板、真实身份核验（HIS）。
+首次启动自动建库并写入合成种子数据（32 张表 / 8 个账号 / 3 个模板 / 6 条知识 + 4 条 FAQ / 3 个应用 / 2 个患者）。
+
+Windows 可用 `scripts/start.ps1`，Linux/macOS 可用 `scripts/start.sh`。
+
+### 👤 演示账号
+
+密码统一为 `medagent123`。
+
+| 账号 | 角色 | 用途 |
+|---|---|---|
+| `u_creator` | 业务人员 | 从模板建应用、试跑、提交发布 |
+| `u_dept` | 科室审批人 | 科室级审批（本部门） |
+| `u_platform` | 平台审批人 | 平台审批、发布、回滚、停用 |
+| `u_knowledge` | 知识运营 | 知识导入 / 审核 |
+| `u_eval` | 评测人员 | 执行评测、看门禁 |
+| `u_doctor` | 医生 | 试跑、临床复核、报告编辑签名 |
+| `u_patient` | 患者 | 患者端（绑定 / 报告 / 随访） |
+| `u_admin` | 平台管理员 | 全量治理、模型开关、审计导出 |
+
+### 🧪 测试
+
+```bash
+python tests/test_api.py               # 25 项接口验收（真实进程 + HTTP）
+python tests/test_llm_live.py          # 3 项真实模型上游（fake OpenAI 兼容上游）
+python tests/test_dify.py              # 4 项 Dify 适配（fake Dify）
+python tests/test_notify.py            # 4 项告警通知（fake webhook）
+python tests/test_rate_limit.py        # 2 项令牌桶限流
+python tests/test_pg_compat.py         # 7 项 PG 运行时转换（1 项真实 PG 跳过）
+python tests/test_pg_migration.py      # 3 项 SQLite→PG 迁移与对账
+python tests/test_production_import.py # 2 项 FastAPI 边缘导入（无 fastapi 时跳过）
+```
+
+共 **50 项**，全部通过。或用 `scripts/check.sh` / `scripts/check.ps1`（测试 + 前端 JS 语法）。
+
+### 🐳 容器化
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d --build
+curl http://127.0.0.1:8080/healthz   # {"status":"ok",...}
+curl http://127.0.0.1:8080/readyz    # {"status":"ready","db":"sqlite"}
+```
+
+单 worker + SQLite 持久化卷；水平扩展须先完成 PostgreSQL 迁移。详见 [生产化部署](docs/production-deployment.md)。
 
 ---
 
-## 8. 安全与合规说明
+## 🏗 架构
 
-- 认证：服务端签发 Token（8h），**不信任 `X-User-Id`**；登录/退出/权限校验全服务端；
-- 权限：角色 + 科室 + 应用归属 + 审批职责分离（FR-002）；
-- 数据：患者数据按绑定隔离；报告仅批准可见；患者标识最小化；`patient_ref` 脱敏；
-- 审计：关键操作留痕，导出需权限且留痕；
-- 安全：禁止输出（诊断/处方/不安全建议）自动阻断并转人工；模型不可用不伪造结果；
-- **非生产**：无 TLS、无 KMS、无等保测评、SQLite 单机、模拟模型与规则引擎；生产须按 PRD v2.0/执行包 v1.1 完成安全、性能、数据、注册专项评审。
+```
+浏览器（原生 ES Module SPA，无构建）
+        │  JSON / Bearer Token（不接受 X-User-Id）
+        ▼
+server/app.py（零依赖 HTTP：静态托管 + API 路由 + Token 中间件）
+  ├─ auth.py              登录 / 会话 / 权限
+  ├─ templates.py         3 个 POC 模板（提示词 / 配置 / 阈值）
+  ├─ apps.py              应用工厂、试跑、发布检查、双审批、发布 / 回滚 / 停用
+  ├─ knowledge.py         知识导入 / 审核 / 版本 / 生效失效 / 检索引用
+  ├─ knowledge_sources.py 来源登记与增量同步（file/json/url）
+  ├─ models.py            模型注册、策略链、降级、调用记录
+  ├─ eval_center.py       评测集、指标、门禁、结果
+  ├─ memory.py            长期记忆（三级范围 / 去重 / 向量检索 / 试跑注入）
+  ├─ engine.py            生成引擎（模板 + 检索 + 安全 + 网关）
+  ├─ safety.py            禁止输出、风险阻断、人工接管
+  ├─ reports.py           报告草稿 / 编辑 / 签名 / 修改率
+  ├─ integrations.py      HIS/EMR/PACS mock 与报告回写
+  ├─ dify_adapter.py      Dify 应用登记与 blocking 调用
+  ├─ ops.py               指标口径、BadCase、审计哈希链
+  ├─ patient.py           患者绑定 / 授权 / 报告 / 随访 / 转人工
+  ├─ wechat.py            微信登录（真实 jscode2session / dev mock）
+  ├─ ratelimit.py         令牌桶限流（429 + Retry-After）
+  ├─ pg_compat.py         PG 运行时兼容层（实验性）
+  └─ seed.py              合成种子数据
+production/               FastAPI 生产边缘（复用 server/handlers.py）
+deploy/                   Dockerfile、Compose、TLS 反代、备份脚本、PG 迁移计划
+web/                      index.html + app.css + app.js（无构建）
+miniprogram/              患者服务小程序（导入微信开发者工具即可）
+tests/                    50 项测试（真实进程 / fake 上游）
+docs/                     接口契约、需求映射、生产部署、压测基线
+```
 
-### v1.1 待确认事项（TBD-01~12）处理
-
-本实现未擅自填入院方事实或预算；涉及医院、预算、真实接口、正式身份源、注册准入的项目仍标记为待确认（见 `docs/requirements-mapping.md`）。
+**技术栈**：Python 标准库（`http.server`、`sqlite3`、`hashlib`）+ 原生 ES Module + WXML/WXSS。
+**存储**：SQLite，32 张表；FastAPI/Uvicorn 仅用于生产边缘，迁移工具可选 `psycopg`。
 
 ---
 
-## 9. 变更与版本
+## 🔍 关键流程
 
-- 版本：`1.1.0`（POC 基线）；
-- 变更流程：需求 → 影响分析（产品/临床/技术/安全/合规/进度/预算）→ 评审 → 更新基线/测试/风险 → 回归；
-- 发布快照固定模板/提示词/模型/知识/评测/审批；注册/临床用途变更须走质量体系流程（当前不适用）。
+**1. 创建并发布应用**
+
+```
+u_creator 建应用(草稿) → 试跑(输出+引用+免责+版本+降级)
+   → 提交发布 → 自动检查(模板/知识范围/可用知识/评测门禁/高风险安全事件)
+   → 未通过 409 release_blocked(逐项原因)
+   → 科室审批 → 平台审批 → 不可变版本快照 → published
+   → 支持停用 / 回滚(恢复配置且与展示版本一致)
+```
+
+**2. 知识治理**
+
+```
+导入(来源/版本/生效/失效/范围) → 待审核(不参与检索) → 审核通过(参与检索)
+   → 过期自动退出检索；所有操作审计
+```
+
+**3. 患者端**
+
+```
+微信登录(dev mock) → 绑定(患者标识 + 核验码 654321) → 授权
+   → 报告(仅 approved_for_patient=1) → 随访提交
+   → 危险信号(胸痛/呼吸困难/出血) → 生成人工待办 + 就医提示
+   → 支持撤回授权 / 解绑；患者数据按绑定隔离
+```
+
+**4. 模型故障安全**
+
+```
+策略链(private-llm → mock-fallback)
+   → 主模型禁用时自动降级并显式标记 degraded
+   → 全部不可用 → 拒绝生成确定性结论 + 转人工，不把 mock 当真实结果
+```
 
 ---
 
-## 10. 文档
+## 📡 API 摘要
 
-- [`docs/requirements-mapping.md`](docs/requirements-mapping.md)：v1.1 FR/NFR/TBD 与实现映射（含未实现项）
-- [`docs/prd-execution-status.md`](docs/prd-execution-status.md)：PRD v2.0 模块执行状态、旧版能力吸收清单、下一步
-- [`docs/production-deployment.md`](docs/production-deployment.md)：生产化 Stage 1 部署、备份、TLS、边界与下一阶段
-- [`docs/load-test-baseline.md`](docs/load-test-baseline.md)：本机压测基线与局限
-- [`docs/api-contract.md`](docs/api-contract.md)：接口、错误码、认证与安全约定
-- 上游依据：`E:\Downloads\医疗AI中台-落地执行包-v1.1.md`（第五部分）
-- 配套 PRD/架构：`../medical-ai-platform/prd/PRD-医疗AI中台-工业落地版-v2.0.docx`
+认证：除 `/api/health`、`/api/auth/login`、`/api/auth/wx-login` 外均需 `Authorization: Bearer <token>`。
+错误格式：`{"error":{"code":"...","message":"...","details":[...]}}`，不返回堆栈。
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST | `/api/auth/login` | 登录，返回 Bearer Token |
+| POST | `/api/auth/wx-login` | 微信登录（真实 / mock） |
+| GET/POST | `/api/apps` | 应用列表 / 创建 |
+| POST | `/api/apps/{id}/trial` | 试跑（输出 / 引用 / 版本 / 轨迹 / 自动记忆） |
+| POST | `/api/apps/{id}/feedback` | 反馈（无用 → BadCase） |
+| GET | `/api/apps/{id}/release-check` | 发布前逐项检查 |
+| POST | `/api/apps/{id}/submit` | 提交发布（进入科室审批） |
+| POST | `/api/approvals/{id}/decide` | 审批通过 / 拒绝（科室 → 平台） |
+| GET/POST | `/api/knowledge`、`/api/faqs` | 知识 / FAQ 列表与导入 |
+| GET | `/api/knowledge/search?q=` | 检索（仅生效 + 已审核 + 范围内） |
+| GET/POST | `/api/knowledge/sources` | 知识来源登记 / 同步 |
+| GET/POST | `/api/memories` | 记忆列表 / 新建 |
+| GET | `/api/memories/search?q=&mode=vector` | 64 维向量 / 关键词检索 |
+| POST | `/api/eval/run` | 执行评测（门禁判定） |
+| GET | `/api/ops/metrics`、`/api/ops/costs?days=30` | 指标口径 / 成本对账 |
+| GET | `/api/audit`、`/api/audit/verify` | 审计查询 / 哈希链校验 |
+| POST | `/api/integrations/report-writeback` | 签名报告回写 HIS（幂等） |
+| GET/POST | `/api/patient/*` | 绑定 / 报告 / 随访 |
+
+完整契约见 [`docs/api-contract.md`](docs/api-contract.md)。
+
+---
+
+## ⚠️ POC 边界（诚实说明）
+
+这是 **POC / 试点准备** 系统，**不是生产或注册产品**：
+
+- 🧪 AI 输出由模板 / 规则 + 模拟模型生成，**非真实临床模型**，不用于任何诊疗决策；
+- 🚫 未实现：真实 Dify / RAGFlow 部署、真实 HIS/EMR/PACS 接口、TLS/等保测评、KMS、PostgreSQL 生产运行、K8s、SSO/MFA、真实临床验证；
+- 💬 微信登录默认 **dev mock**，真实需配置 `WX_APPID` / `WX_SECRET`；
+- 🗂 所有数据均为**合成种子数据**，不含真实患者信息；
+- 🐘 PG 运行时兼容层为**实验性**，未在真实 PostgreSQL 验证；PG 迁移工具已完成但运行时未接线；
+- 📉 单 worker + SQLite，不能水平扩展；压测基线仅为本机只读接口，不是容量承诺。
+
+---
+
+## 🔒 安全与合规
+
+- **认证**：服务端签发 Token（8h），不信任 `X-User-Id`；登录 / 退出 / 权限校验全在服务端；
+- **权限**：角色 + 科室 + 应用归属 + 审批职责分离；
+- **数据**：患者数据按绑定隔离，报告仅批准可见，患者标识最小化；
+- **审计**：关键操作 SHA-256 哈希链留痕，导出需权限且留痕；
+- **安全**：禁止输出自动阻断并转人工；模型不可用不伪造结果；错误不回堆栈；
+- **密钥**：仅从环境变量 / Secret 注入，`.env` 不提交，镜像内不含凭据。
+
+生产部署前的必读限制见 [生产化部署 · 已知限制](docs/production-deployment.md)。
+
+---
+
+## 📚 文档
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/api-contract.md`](docs/api-contract.md) | 接口、错误码、认证与安全约定 |
+| [`docs/requirements-mapping.md`](docs/requirements-mapping.md) | v1.1 FR / NFR / TBD 与实现映射（含未实现项） |
+| [`docs/prd-execution-status.md`](docs/prd-execution-status.md) | 模块执行状态与下一步 |
+| [`docs/production-deployment.md`](docs/production-deployment.md) | 部署、备份、TLS、边界与下一阶段 |
+| [`docs/postgres-runtime-switch.md`](docs/postgres-runtime-switch.md) | PG 运行时切换（实验性） |
+| [`docs/load-test-baseline.md`](docs/load-test-baseline.md) | 本机压测基线与局限 |
+| [`deploy/postgres/README.md`](deploy/postgres/README.md) | SQLite → PostgreSQL 迁移工具 |
+| [`miniprogram/README.md`](miniprogram/README.md) | 患者端小程序导入与联调 |
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) © skywalkerqqq
