@@ -9,7 +9,7 @@
    cd medagent-platform
    python server/app.py --port 8090 --db data/medagent.db --reset
    ```
-2. 微信开发者工具 → 导入项目 → 目录选 `medagent-platform/miniprogram`，AppID 用测试号；
+2. 微信开发者工具 → 导入项目 → 目录选 `miniprogram`，AppID 用测试号；
 3. 「详情 → 本地设置」勾选「不校验合法域名、web-view、TLS 版本以及 HTTPS 证书」；
 4. 修改 `config.js` 的 `BASE_URL`：
    - 模拟器：`http://127.0.0.1:8090`

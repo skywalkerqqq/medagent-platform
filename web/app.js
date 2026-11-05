@@ -306,7 +306,7 @@ async function renderDashboard(view) {
       <div class="grid grid-2" style="margin-top:20px">
         <div class="card">
           <h3 class="section-title">v1.1 发布前检查清单</h3>
-          <p class="section-sub">来自落地执行包 v1.1 第 14 节；未勾选项需项目方确认。</p>
+          <p class="section-sub">v1.1 发布前检查清单；未勾选项需项目方确认。</p>
           ${dash.release_checklist.map((item) => `<div class="check-row">
             <span class="check-mark ${item.done ? 'ok' : 'bad'}">${item.done ? '✓' : '!'}</span>
             <div class="small">${esc(item.item)}</div>
